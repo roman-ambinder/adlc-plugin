@@ -22,8 +22,23 @@ function real(p) {
   }
 }
 
+// Opt-in diagnostics: ADLC_HOOK_LOG=<file> appends hook metadata (never tool input or messages).
+function probeLog(input) {
+  const file = process.env.ADLC_HOOK_LOG;
+  if (!file) return;
+  try {
+    const pick = ['hook_event_name', 'tool_name', 'agent_id', 'agent_type', 'session_id', 'cwd', 'permission_mode', 'source', 'stop_hook_active'];
+    const entry = { ts: new Date().toISOString(), env_project_dir: process.env.CLAUDE_PROJECT_DIR || null };
+    for (const k of pick) if (input[k] !== undefined) entry[k] = input[k];
+    fs.appendFileSync(file, `${JSON.stringify(entry)}\n`);
+  } catch {
+    // diagnostics must never affect the hook
+  }
+}
+
 // Returns null outside adlc projects so every hook stays silent there.
 function lifecycle(input) {
+  probeLog(input);
   const root = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
   const dir = path.join(root, '.agent-lifecycle');
   const stateFile = path.join(dir, 'state.json');

@@ -163,3 +163,26 @@ test('hooks.json uses exec form with the plugin root variable', () => {
     }
   }
 });
+
+// Regression from the live smoke test: the worker ran the CLI by quoted path and wrote files with heredocs.
+test('a claim made through a quoted CLI path binds the worker', () => {
+  const root = project({ lease: true });
+  const who = { agent_id: 'agent-q', agent_type: 'adlc:developer', cwd: root };
+  hook('guard', bash('(which adlc || echo nocli); node "/x/plugins/adlc/bin/adlc" worker claim T1 --lease L-abc123; cat .agent-lifecycle/packets/T1.md', who), root);
+  const bindings = JSON.parse(fs.readFileSync(path.join(root, '.agent-lifecycle/runs/bindings.json'), 'utf8'));
+  assert.equal(bindings['agent-q'].lease, 'L-abc123');
+  assert.equal(decision(hook('guard', bash('node "/x/bin/adlc" integrate done T1', who), root)), 'deny');
+  assert.equal(decision(hook('guard', bash('node "/x/bin/adlc" approve plan'), root)), 'ask');
+});
+
+test('workers cannot write files through the shell, except into .agent-lifecycle/tmp/', () => {
+  const root = project({ lease: true });
+  const who = { agent_id: 'agent-s', agent_type: 'adlc:developer', cwd: root };
+  for (const cmd of ["mkdir -p src && cat > src/a.js <<'EOF'\nx\nEOF", 'echo x | tee src/a.js', "sed -i '' s/a/b/ src/a.js", 'cp /tmp/x src/a.js']) {
+    assert.equal(decision(hook('guard', bash(cmd, who), root)), 'deny', cmd);
+  }
+  for (const cmd of ['cat > .agent-lifecycle/tmp/handoff-T1.json <<EOF\n{}\nEOF', 'ls 2>/dev/null', 'echo done >&2', 'node --test test/a.test.js']) {
+    assert.equal(decision(hook('guard', bash(cmd, who), root)), null, cmd);
+  }
+  assert.equal(decision(hook('guard', bash('cat > notes.txt <<EOF\nx\nEOF'), root)), null, 'the main session is not restricted this way');
+});

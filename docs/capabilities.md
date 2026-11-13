@@ -1,6 +1,6 @@
 # adlc capabilities — implemented, tested, unsupported
 
-Status as of version 0.1.0 (Slice 1), 2026-11-13. "Tested" means covered by `npm test` (90 tests, all passing at the time of writing) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
+Status as of version 0.1.0 (Slice 1), 2026-11-13. "Tested" means covered by `npm test` (92 tests, all passing at the time of writing) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
 
 ## Implemented and tested
 
@@ -22,15 +22,32 @@ Status as of version 0.1.0 (Slice 1), 2026-11-13. "Tested" means covered by `npm
 | Audit, SubagentStop and SessionStart hooks; silence outside adlc projects | `hooks/*.js` | `tests/hooks.test.js` |
 | End-to-end walkthrough of one feature through every stage, using real CLI and hook scripts | `examples/slugify/run.sh` | `tests/e2e.test.js` |
 
-## Implemented, not live-tested
+## Live smoke test (2026-11-13, Claude Code 2.1.311, `claude -p --plugin-dir`, Sonnet)
 
-These are prompt files (skills and agents), or depend on runtime behaviour that unit tests cannot exercise.
+Run against a scratch repository seeded at the build stage. Two `/adlc:next` runs cost $0.31 and $0.18.
 
-- The 13 skills (`/adlc:*`) and 5 agents. Strict validation passes, but the model's behaviour in a live session has not been observed.
-- Agent `skills: [adlc:worker-contract]` preload. The exact name format for a plugin skill in this field is not documented, so the agent prompts also tell the worker to read the file directly as a fallback.
-- The exact `agent_type` string Claude Code sends for plugin subagents. The guard accepts both `developer` and `adlc:developer`.
-- Hook `ask` precedence over a user's `allow` rule for the same command.
-- `${user_config.*}` substitution in skill bodies. The CLI treats empty or unsubstituted values as defaults.
+| Question | Observed |
+|---|---|
+| Plugin loads; SessionStart hook runs | Yes. `CLAUDE_PROJECT_DIR` is set for hooks |
+| `/adlc:status` works | Yes. The `adlc` CLI is on PATH in the main session |
+| `/adlc:next` runs a sequential build end to end | Yes. The developer subagent claimed T1 and wrote the code and tests; the coordinator integrated it and completed build |
+| `agent_type` / `agent_id` in subagent hook input | `agent_type` is `"adlc:developer"`; `agent_id` is present on PreToolUse, PostToolUse and SubagentStop |
+| `skills: [adlc:worker-contract]` preload in plugin agents | Works. The contract text is in the subagent's initial context |
+| `${CLAUDE_SESSION_ID}` substitution in skill bodies | Works. The lease recorded a real session id |
+| Hook `ask` vs a user `allow` rule | The hook wins. With `Bash(git commit *)` allowed, the commit was still held for approval (denied in `-p`, which cannot prompt) |
+| SubagentStop releases the lease without manual confirmation | Yes, after the fix below |
+
+**Bugs found and fixed during the smoke test**
+- The worker ran the CLI as `node "/…/bin/adlc" worker claim …`. The quote after `adlc` defeated the claim pattern, so the worker was never bound and the coordinator had to confirm the stop by hand. The claim, user-only and worker-subcommand patterns now accept a quoted CLI path.
+- The worker wrote files with shell heredocs (`cat > src/x.js <<EOF`), which neither the Write/Edit scope check nor the write log saw. Worker roles are now denied shell writes outside `.agent-lifecycle/tmp/`, and the worker contract says to use Write and Edit. In the re-run, every worker write went through the Write tool and was attributed in `runs/writes.jsonl`.
+
+**Still not live-tested**
+- `${user_config.*}` substitution in `/adlc:start` (the smoke test seeded state with the CLI).
+- The analyst, architect, reviewer and tester agents, and the plan, verify, review and release skills.
+- An interactive session, as opposed to `-p`.
+- SubagentStop's `last_assistant_message` was empty in `-p` (the subagent reported through its handback), so stop records have an empty excerpt.
+
+Set `ADLC_HOOK_LOG=<file>` to record hook metadata (event, tool, `agent_id`, `agent_type`, session, cwd; never tool input) when diagnosing.
 
 ## Designed, not implemented yet (Slices 2–3)
 

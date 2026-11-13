@@ -7,7 +7,21 @@ const PROTECTED_IN_CMD = /\.agent-lifecycle\/(state\.json|approvals\.jsonl|runs\
 const MANAGED_NAME_IN_CMD = /(^|[\s/'"])(state\.json|approvals\.jsonl|bindings\.json|stops\.jsonl|writes\.jsonl|audit\.jsonl)\b|(^|[\s'"])runs\//;
 const WRITE_OPS = /(>|\btee\b|\bsed\s+-i|\brm\b|\bmv\b|\bcp\b|\btruncate\b|\bdd\b|\bpython3?\b|\bnode\b|\bperl\b|\bruby\b|\bchmod\b|\bln\b)/;
 
-const USER_ONLY = /\badlc\s+(approve|skip|unblock)\b/;
+// `adlc` may appear as a bare command or as a quoted path ending in bin/adlc, e.g. node "/x/bin/adlc" claim.
+const ADLC = String.raw`\badlc['"]?\s+`;
+const USER_ONLY = new RegExp(`${ADLC}(approve|skip|unblock)\\b`);
+const ADLC_SUBCOMMAND = new RegExp(`${ADLC}([a-z-]+)`, 'g');
+const WORKER_CLAIM = new RegExp(`${ADLC}worker\\s+claim\\s+['"]?(T\\d+)['"]?\\s+--lease\\s+['"]?(L-[0-9a-f]+)`);
+
+// Files a shell command writes: redirect and tee targets, plus a marker for in-place or copying tools.
+function shellWriteTargets(cmd) {
+  const out = [];
+  for (const m of cmd.matchAll(/(?<![<0-9&>])>>?\s*(['"]?)([^\s'";&|()]+)\1/g)) if (!m[2].startsWith('&')) out.push(m[2]);
+  for (const m of cmd.matchAll(/\btee\s+(?:-a\s+)?(['"]?)([^\s'";&|()]+)\1/g)) out.push(m[2]);
+  if (/\bsed\s+(-[a-zA-Z]*\s+)*-i/.test(cmd) || /(^|[\s;&|(])(cp|mv|install|dd|truncate|touch)\s/.test(cmd)) out.push('<cp/mv/sed -i/dd/truncate/touch>');
+  return out;
+}
+const SHELL_WRITE_OK = (target) => target === '/dev/null' || target === '/dev/stdout' || target === '/dev/stderr' || /(^|\/)\.agent-lifecycle\/tmp\//.test(target);
 
 const TEST_FILE = /(^|\/)(tests?|__tests__|spec|specs)\/|[._-](test|spec)\.[a-z0-9]+$|_test\.(go|py)$|(^|\/)test_[^/]*\.py$/i;
 const TEST_DISABLE = /(\b(it|test|describe)\.(skip|only)\s*\(|\bx(it|describe|test)\s*\(|@pytest\.mark\.skip|@unittest\.skip|\bt\.Skip\(|#\[ignore\]|\{\s*skip:\s*true)/;
@@ -35,4 +49,4 @@ function riskyKind(cmd, level = 'strict') {
   return null;
 }
 
-module.exports = { PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
+module.exports = { PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };

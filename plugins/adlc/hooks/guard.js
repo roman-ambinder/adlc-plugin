@@ -48,9 +48,13 @@ function decideBash(input, ctx, binding, level) {
     return ask(`this command may modify adlc-managed files (state.json, approvals.jsonl, runs/): \`${cmd}\`. Approve only if it targets a different file`);
   }
   for (const re of P.CHECK_BYPASS) if (re.test(cmd)) return deny('this command bypasses or masks checks (--no-verify, "|| true" after a check); run checks honestly and report failures');
+  if (WORKER_ROLES.includes(roleOf(input.agent_type))) {
+    const bad = P.shellWriteTargets(cmd).filter((x) => !P.SHELL_WRITE_OK(x));
+    if (bad.length) return deny(`workers change files only with the Write or Edit tools, so every write is attributed and scoped (shell writes are allowed only into .agent-lifecycle/tmp/); blocked: ${bad.join(', ')}`);
+  }
   if (binding) {
     if (/\bgit\b/.test(cmd)) return deny('workers never run git; the coordinator integrates your work');
-    for (const m of cmd.matchAll(/\badlc\s+([a-z-]+)/g)) {
+    for (const m of cmd.matchAll(P.ADLC_SUBCOMMAND)) {
       if (!WORKER_ADLC.includes(m[1])) return deny(`workers may only run adlc ${WORKER_ADLC.join('|')} (attempted adlc ${m[1]})`);
     }
   }
@@ -71,7 +75,7 @@ function decide(input, ctx, env = process.env) {
 // `adlc worker claim <T> --lease <L>` from a subagent binds its agent_id to that lease (first claim wins).
 function recordClaim(input, ctx) {
   if (input.tool_name !== 'Bash' || !input.agent_id || !ctx.state) return;
-  const m = String((input.tool_input || {}).command || '').match(/\badlc\s+worker\s+claim\s+(T\d+)\s+--lease\s+(L-[0-9a-f]+)/);
+  const m = String((input.tool_input || {}).command || '').match(P.WORKER_CLAIM);
   if (!m) return;
   const lease = (ctx.state.leases || []).find((l) => l.lease === m[2] && l.task === m[1] && l.status === 'active');
   if (!lease) return;

@@ -229,7 +229,7 @@ npm test
 npm run validate
 ```
 
-`npm test` runs 90 `node:test` tests: state, stages, tasks, gates, evidence, dispatch, integration, CLI, hooks, skill and agent files, and the end-to-end example. `npm run validate` runs `claude plugin validate --strict` on the plugin and the marketplace.
+`npm test` runs 92 `node:test` tests: state, stages, tasks, gates, evidence, dispatch, integration, CLI, hooks, skill and agent files, and the end-to-end example. `npm run validate` runs `claude plugin validate --strict` on the plugin and the marketplace.
 
 ## Troubleshooting
 
@@ -242,6 +242,7 @@ npm run validate
 | `no SubagentStop record for L-…` | The worker may still be running. Once it has returned, inspect its changes and run `adlc lease stopped <L> "<note>"` |
 | Task blocked after repeated failures | Read its evidence and handoff, decide the approach, then `/adlc:unblock "<note>" --task T<n>` |
 | Hooks seem inactive | Hooks only act in projects with `.agent-lifecycle/state.json`. Check `/plugin` → Errors, and `claude --debug` |
+| Need to see what hooks receive | Start Claude Code with `ADLC_HOOK_LOG=/tmp/adlc-hooks.jsonl` to log hook metadata (never tool input) |
 | Too many permission prompts | Copy `plugins/adlc/settings-template.json` entries into `.claude/settings.json`. Guard `ask` prompts for risky commands remain by design |
 
 ## License
