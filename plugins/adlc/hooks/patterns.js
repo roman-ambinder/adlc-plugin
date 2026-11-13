@@ -31,11 +31,15 @@ const CHECK_BYPASS = [
   /\b(test|tests|pytest|jest|vitest|mocha|tsc|eslint|ruff|mypy|--test)\b[^;&|\n]*\|\|\s*(true\b|:|exit\s+0\b)/,
 ];
 
+// `git` followed by global options such as -C <dir>, -c k=v or --git-dir=..., then the subcommand.
+const GIT = String.raw`\bgit(?:\s+(?:-C\s+(?:'[^']*'|"[^"]*"|\S+)|-c\s+\S+|--[a-z-]+(?:=\S+)?))*\s+`;
+const git = (rest) => new RegExp(GIT + rest);
+
 // standard: the actions the safety rules always require approval for. strict adds other history-changing git commands.
 const RISKY = [
-  { kind: 'git commit/push/tag', standard: true, re: /\bgit\s+(commit|push|tag)\b/ },
-  { kind: 'destructive git command', standard: true, re: /\bgit\s+(reset\s+--hard|clean\b|checkout\s+--\s|restore\b|stash\s+(drop|clear)|branch\s+-D)/ },
-  { kind: 'git history or worktree change', standard: false, re: /\bgit\s+(merge|rebase|cherry-pick|am|revert|stash|worktree\s+(add|remove|prune)|branch\s+-d)\b/ },
+  { kind: 'git commit/push/tag', standard: true, re: git(String.raw`(commit|push|tag)\b`) },
+  { kind: 'destructive git command', standard: true, re: git(String.raw`(reset\s+--hard|clean\b|checkout\s+--\s|restore\b|stash\s+(drop|clear)|branch\s+-D)`) },
+  { kind: 'git history or worktree change', standard: false, re: git(String.raw`(merge|rebase|cherry-pick|am|revert|stash|worktree\s+(add|remove|prune)|branch\s+-d)\b`) },
   { kind: 'GitHub CLI action (pull requests, releases, API)', standard: true, re: /\bgh\s+(pr|release|repo|api|workflow|issue)\b/ },
   { kind: 'dependency installation', standard: true, re: /\b(npm|pnpm|yarn|bun)\s+(i|install|add|ci|update|upgrade)\b|\bnpx\s|\bpip3?\s+install\b|\buv\s+(add|sync|pip\s+install)\b|\bpoetry\s+(add|install)\b|\bcargo\s+(add|install)\b|\bgo\s+(get|install)\b|\bbrew\s+install\b|\bgem\s+install\b|\bapt(-get)?\s+install\b/ },
   { kind: 'network or external service access', standard: true, re: /\b(curl|wget|ssh|scp|rsync|telnet|ftp)\b|\bnc\s/ },

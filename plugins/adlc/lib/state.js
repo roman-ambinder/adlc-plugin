@@ -39,7 +39,8 @@ function now() {
 
 function findRoot(start = process.cwd()) {
   if (process.env.ADLC_ROOT) return fs.realpathSync(path.resolve(process.env.ADLC_ROOT));
-  const begin = fs.realpathSync(path.resolve(start));
+  // A worker in a linked git worktree uses the main checkout's state, never the worktree's committed copy.
+  const begin = fs.realpathSync(require('./worktree').mainRootFor(path.resolve(start)));
   let dir = begin;
   for (;;) {
     if (fs.existsSync(path.join(dir, DIR, 'state.json'))) return dir;

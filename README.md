@@ -8,7 +8,7 @@ Focused subagents do the work: analyst, architect, developer, tester and reviewe
 
 It is built for solo developers and small teams. It is language-agnostic: it uses the repository's own test, lint, format and type-check commands.
 
-> **Version 0.2.0.** Build runs sequentially, or in parallel in the **shared checkout** when the plan has independent tasks with disjoint files. Worktree isolation (spec §6.7) is not implemented yet: `parallel_mode: worktree` falls back to shared and records why. See [docs/capabilities.md](docs/capabilities.md).
+> **Version 0.3.0.** Build runs sequentially, in parallel in the **shared checkout**, or in parallel in **isolated git worktrees** (one per worker), depending on the plan and the repository. The chosen mode and the reasons are recorded in `plan.md`. See [docs/capabilities.md](docs/capabilities.md).
 
 ## Architecture
 
@@ -67,12 +67,12 @@ adlc-plugin/
 │   ├── bin/adlc                         state CLI (on the Bash PATH while enabled)
 │   ├── lib/                             cli, state, stages, tasks, packets, gates, rules,
 │   │                                    evidence, redact, exec, dispatch, integrate,
-│   │                                    fsutil, glob, errors
+│   │                                    worktree, fsutil, glob, errors
 │   ├── hooks/                           hooks.json, guard, audit, subagent-stop,
 │   │                                    session-start, common, patterns
 │   ├── skills/<name>/SKILL.md           start plan approve next status verify review
 │   │                                    resume release skip unblock coordinator worker-contract
-│   ├── agents/                          analyst architect developer tester reviewer
+│   ├── agents/                          analyst architect developer developer-worktree tester reviewer
 │   ├── templates/                       requirements plan decisions handoff release review
 │   ├── schemas/                         state.schema.json, handoff.schema.json
 │   └── settings-template.json           permissions to copy into .claude/settings.json
@@ -148,11 +148,22 @@ Set these when enabling the plugin, or later with `/plugin` → Installed → Co
 | `guard_level` | `strict` | `standard` asks before commit, push, PR, install, network, destructive, publish and deploy commands. `strict` also asks before merge, rebase, worktree and other history edits |
 | `max_repair_attempts` | `3` | Failed attempts per task before it is blocked and work stops |
 | `max_tasks_per_run` | `5` | Tasks dispatched per session before the coordinator stops and writes a handoff |
-| `parallel_mode` | `auto` | `auto` and `shared` run independent M/L tasks with disjoint files concurrently in the shared checkout; otherwise sequential. `worktree` currently falls back to shared. `sequential` always runs one worker at a time. The chosen mode and reasons are written to `plan.md` |
-| `max_parallel` | `2` | Upper bound on concurrent workers in shared mode |
+| `parallel_mode` | `auto` | `auto` picks `worktree` when the repository allows it (see below), otherwise `shared`, and `sequential` when no wave has two independent M/L tasks. `worktree` and `shared` request a mode, with the same fallbacks. `sequential` always runs one worker at a time |
+| `max_parallel` | `2` | Upper bound on concurrent workers in parallel modes |
 | `serial_globs` | lockfiles, manifests, config, migrations, generated files | Tasks that touch these always run alone |
 
 Values are captured into `state.json` when a change starts.
+
+### Worktree mode
+
+Each parallel worker runs in its own git worktree (`adlc:developer-worktree`, `isolation: worktree`). Requirements, all checked before planning and before each dispatch:
+
+- a git repository with at least one commit;
+- `"worktree": {"baseRef": "head"}` in `.claude/settings.json` (included in `settings-template.json`), so worktrees start from your current commit instead of the remote default branch;
+- `.claude/worktrees/` listed in `.gitignore`;
+- no uncommitted changes outside `.agent-lifecycle/`, since worktrees only see committed files.
+
+Workers never commit. When a task passes `adlc integrate check`, the CLI prints the exact `git add`, `git commit` (in the worktree) and `git merge --no-ff` (into your current branch) commands. The coordinator shows them and runs them only through permission prompts. `adlc integrate done` refuses a task until its commit is merged into `HEAD` and the cross-task checks have run after the merge. Merge conflicts are aborted and reported, never resolved automatically.
 
 ## Project state: `.agent-lifecycle/`
 
@@ -229,7 +240,7 @@ npm test
 npm run validate
 ```
 
-`npm test` runs 92 `node:test` tests: state, stages, tasks, gates, evidence, dispatch, integration, CLI, hooks, skill and agent files, and the end-to-end example. `npm run validate` runs `claude plugin validate --strict` on the plugin and the marketplace.
+`npm test` runs 101 `node:test` tests: state, stages, tasks, gates, evidence, dispatch, integration, CLI, hooks, skill and agent files, and the end-to-end example. `npm run validate` runs `claude plugin validate --strict` on the plugin and the marketplace.
 
 ## Troubleshooting
 

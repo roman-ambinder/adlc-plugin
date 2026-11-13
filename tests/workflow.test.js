@@ -143,7 +143,7 @@ test('auto resolves to shared when a wave has two independent M/L tasks, and rec
   const { root, s } = planned([TASK(), TASK({ files: ['src/b.js'] })]);
   assert.equal(s.execution.mode, 'shared');
   assert.match(s.execution.reasons[0], /independent tasks found \(wave 1: T1, T2\)/);
-  assert.match(s.execution.reasons[1], /worktree mode is not available/);
+  assert.match(s.execution.reasons[1], /worktree mode unavailable \(not a git repository/);
   assert.deepEqual(s.execution.waves, [['T1', 'T2']]);
   const plan = fs.readFileSync(path.join(root, '.agent-lifecycle/plan.md'), 'utf8');
   assert.match(plan, /- mode: shared \(requested: auto/);

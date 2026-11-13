@@ -2,7 +2,7 @@
 'use strict';
 // PostToolUse: records file writes (for ownership checks) and approved risky commands. Never blocks.
 const path = require('node:path');
-const { WRITE_TOOLS, readStdin, lifecycle, relPath } = require('./common');
+const { WRITE_TOOLS, readStdin, lifecycle, locate } = require('./common');
 const { USER_ONLY, riskyKind } = require('./patterns');
 const { appendLine } = require('../lib/fsutil');
 const { redact } = require('../lib/redact');
@@ -20,7 +20,10 @@ function main() {
       if (kind) appendLine(path.join(ctx.runs, 'audit.jsonl'), { ...base, kind, cmd: redact(cmd).slice(0, 2000) });
     } else if (WRITE_TOOLS.includes(input.tool_name)) {
       const target = ti.file_path || ti.notebook_path;
-      if (target) appendLine(path.join(ctx.runs, 'writes.jsonl'), { ...base, tool: input.tool_name, path: relPath(ctx, input, target) });
+      if (target) {
+        const where = locate(ctx, input, target);
+        appendLine(path.join(ctx.runs, 'writes.jsonl'), { ...base, tool: input.tool_name, path: where.path, workspace: where.workspace });
+      }
     }
   } catch (err) {
     process.stderr.write(`adlc audit: ${err.message}\n`);

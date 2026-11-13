@@ -186,3 +186,12 @@ test('workers cannot write files through the shell, except into .agent-lifecycle
   }
   assert.equal(decision(hook('guard', bash('cat > notes.txt <<EOF\nx\nEOF'), root)), null, 'the main session is not restricted this way');
 });
+
+// Regression from the live worktree test: `git -C <worktree> commit` ran without an approval prompt.
+test('git global options do not hide risky subcommands', () => {
+  const root = project();
+  for (const cmd of ["git -C '/tmp/a b/wt' commit -m 'adlc(T1): x'", 'git -c user.name=x commit -m y', 'git --git-dir=/x/.git push', 'git -C /w merge --no-ff wt-T1', 'git -C /w worktree remove /w/x']) {
+    assert.equal(decision(hook('guard', bash(cmd), root)), 'ask', cmd);
+  }
+  assert.equal(decision(hook('guard', bash('git -C /w status --short'), root)), null);
+});

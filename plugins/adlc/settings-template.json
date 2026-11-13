@@ -1,4 +1,5 @@
 {
+  "worktree": { "baseRef": "head" },
   "permissions": {
     "allow": [
       "Bash(adlc status)", "Bash(adlc status *)", "Bash(adlc next)", "Bash(adlc next *)",

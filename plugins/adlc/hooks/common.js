@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { atomicWrite, readJson, withLock } = require('../lib/fsutil');
+const { linkedWorktree, mainRootFor } = require('../lib/worktree');
 
 const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
 
@@ -39,7 +40,8 @@ function probeLog(input) {
 // Returns null outside adlc projects so every hook stays silent there.
 function lifecycle(input) {
   probeLog(input);
-  const root = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
+  // Hooks fired inside a worker's git worktree still use the main checkout's state.
+  const root = mainRootFor(process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd());
   const dir = path.join(root, '.agent-lifecycle');
   const stateFile = path.join(dir, 'state.json');
   if (!fs.existsSync(stateFile)) return null;
@@ -72,6 +74,23 @@ function relPath(ctx, input, p) {
   return path.relative(ctx.root, abs).split(path.sep).join('/');
 }
 
+// Where a file lives: inside a linked worktree of this repository, the path is relative to that worktree.
+function locate(ctx, input, p) {
+  const abs = path.resolve(input.cwd || ctx.root, String(p));
+  const linked = linkedWorktree(path.dirname(abs));
+  if (linked && linked.mainRoot === ctx.realRoot) {
+    const rel = path.relative(linked.worktreeRoot, real(path.dirname(abs)));
+    return { path: path.join(rel, path.basename(abs)).split(path.sep).join('/'), workspace: linked.worktreeRoot };
+  }
+  return { path: relPath(ctx, input, p), workspace: null };
+}
+
+function workspaceOf(ctx, dir) {
+  if (!dir) return null;
+  const linked = linkedWorktree(dir);
+  return linked && linked.mainRoot === ctx.realRoot ? linked.worktreeRoot : null;
+}
+
 function bindingsFile(ctx) {
   return path.join(ctx.runs, 'bindings.json');
 }
@@ -88,4 +107,4 @@ function updateBindings(ctx, fn) {
   }, { waitMs: 2000 });
 }
 
-module.exports = { WRITE_TOOLS, readStdin, lifecycle, emit, preToolDecision, roleOf, relPath, readBindings, updateBindings };
+module.exports = { WRITE_TOOLS, readStdin, lifecycle, emit, preToolDecision, roleOf, relPath, locate, workspaceOf, readBindings, updateBindings };
