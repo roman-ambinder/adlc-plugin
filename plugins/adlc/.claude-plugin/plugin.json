@@ -1,7 +1,7 @@
 {
   "name": "adlc",
   "displayName": "ADLC — Agentic Development Lifecycle",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Coordinates focused agents through discover → specify → plan → design → build → verify → review → release, with on-disk state, evidence, and approval gates.",
   "author": { "name": "adlc contributors" },
   "license": "MIT",
@@ -39,7 +39,7 @@
     "parallel_mode": {
       "type": "string",
       "title": "Parallel build mode",
-      "description": "auto and shared run independent tasks with disjoint files concurrently in the shared checkout; worktree currently falls back to shared; sequential runs one worker at a time.",
+      "description": "auto uses isolated git worktrees when the repository allows it, otherwise the shared checkout, and sequential when tasks are not independent. worktree and shared request a mode with the same fallbacks.",
       "options": ["auto", "worktree", "shared", "sequential"],
       "default": "auto"
     },

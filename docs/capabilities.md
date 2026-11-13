@@ -1,6 +1,6 @@
 # adlc capabilities — implemented, tested, unsupported
 
-Status as of version 0.2.0 (Slices 1–2), 2026-11-13. "Tested" means covered by `npm test` (95 tests, all passing at the time of writing) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
+Status as of version 0.3.0 (Slices 1–3), 2026-11-13. "Tested" means covered by `npm test` (101 tests, all passing at the time of writing) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
 
 ## Implemented and tested
 
@@ -63,9 +63,30 @@ Implemented, tested (`tests/parallel.test.js`, `tests/workflow.test.js`) and liv
   - the worker check runs did not overlap.
 - No separate binding probe is needed. Hooks inside subagents receive `agent_id`; this is documented, and the live test confirmed it. If `agent_id` were ever missing, unbound workers are denied every write, so the failure is safe and visible.
 
-## Designed, not implemented yet (Slice 3)
+## Worktree-isolated parallel build (Slice 3)
 
-- `worktree` mode: `developer-worktree` agent with `isolation: worktree`, `worktree.baseRef: "head"` precondition, and coordinator-run commit and merge in integration order. Until then `worktree` falls back to `shared` with the reason recorded.
+Implemented, tested (`tests/worktree.test.js`, which uses real `git worktree`s) and live-tested.
+
+- `auto`/`worktree` resolve to `worktree` when the repository has commits, `worktree.baseRef` is `"head"`, `.claude/worktrees/` is ignored, and there are no uncommitted changes outside `.agent-lifecycle/`. Otherwise they fall back to `shared` and list every unmet precondition.
+- The CLI and hooks resolve the main checkout from inside a linked worktree, by reading `.git` and `commondir` without spawning git. A worker never reads a stale committed copy of `state.json`.
+- The guard limits a worker's writes to its own worktree and its task's files. The write log records paths relative to the worktree, plus the worktree path.
+- `integrate check` validates the worktree's actual diff and prints the exact add, commit and merge commands. `integrate done` requires that the commit exists, that it is merged into `HEAD`, and that the cross-task checks ran after the merge.
+- **Live test** (2026-11-13, Sonnet, $0.32), two independent tasks:
+  - the platform created both worktrees from the approved commit, which confirms `baseRef: "head"`;
+  - both `adlc:developer-worktree` workers were bound with their worktree as `cwd`;
+  - all writes were attributed with worktree-relative paths;
+  - both integration checks passed;
+  - the merge command was held for approval; `-p` cannot prompt, so I ran the remaining commands as the user;
+  - `integrate done` refused T1 before the merge and accepted it after;
+  - the history shows two `--no-ff` merges.
+
+**Bugs found by the live test and fixed**
+- `git -C '<worktree>' commit …` was not recognised as a commit, because the patterns expected the subcommand straight after `git`. The guard patterns now skip `-C <dir>`, `-c k=v` and `--opt=value`.
+- The coordinator appended a co-author trailer to the printed merge message. The rules now say to run the commands character for character.
+
+**Known limits**
+- In this environment, the commit in the worktree ran without a platform prompt even though it was not in `--allowedTools`. The guard bug above is fixed; the platform-side cause was not investigated and may be a user-level hook.
+- Worktrees are left in place after integration (Claude Code keeps worktrees that had changes). The coordinator offers `git worktree remove`, which needs approval.
 
 ## Unsupported by the platform (limitations and workarounds)
 
@@ -84,7 +105,6 @@ Implemented, tested (`tests/parallel.test.js`, `tests/workflow.test.js`) and liv
 
 - `guard_level: standard` still asks for commits, pushes, PRs, installs, network access, destructive commands, publishing and deploying, because the safety rules require approval for all of them. `strict` adds merge, rebase, worktree and other history edits.
 - The reviewer agent has no Write or Edit tools. The coordinator saves the reviewer's report unchanged and records it with `adlc review add`.
-- `developer-worktree.md` (spec §6.2 and §8) is deferred to Slice 3, together with worktree mode.
 - The spec's binding probe (`adlc probe`, §6.7) was not built; it is unnecessary given documented and live-confirmed `agent_id` (see above).
 - Workers must run `adlc worker claim` before writing in every mode, not only in parallel modes, so every worker write is attributed.
 - `adlc task update`, `adlc lease stopped`, `adlc trace` and `adlc archive` were added during implementation.
