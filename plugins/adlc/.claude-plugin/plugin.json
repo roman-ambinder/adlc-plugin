@@ -1,0 +1,61 @@
+{
+  "name": "adlc",
+  "displayName": "ADLC — Agentic Development Lifecycle",
+  "version": "0.1.0",
+  "description": "Coordinates focused agents through discover → specify → plan → design → build → verify → review → release, with on-disk state, evidence, and approval gates.",
+  "author": { "name": "adlc contributors" },
+  "license": "MIT",
+  "keywords": ["lifecycle", "workflow", "agents", "approvals", "testing", "review"],
+  "userConfig": {
+    "approval_gates": {
+      "type": "string",
+      "title": "Approval gates",
+      "description": "Comma-separated gates that need your approval: plan, release. Use none to disable gates (platform permission prompts and guard prompts still apply).",
+      "default": "plan,release"
+    },
+    "guard_level": {
+      "type": "string",
+      "title": "Guard level",
+      "description": "standard asks before commits, pushes, PRs, installs, network access, destructive commands, publishing and deploying. strict also asks before merges, rebases, worktree changes and other git history edits.",
+      "options": ["strict", "standard"],
+      "default": "strict"
+    },
+    "max_repair_attempts": {
+      "type": "number",
+      "title": "Max repair attempts per task",
+      "description": "Failed attempts allowed per task before it is blocked and the coordinator stops.",
+      "default": 3,
+      "min": 1,
+      "max": 10
+    },
+    "max_tasks_per_run": {
+      "type": "number",
+      "title": "Max tasks per run",
+      "description": "Tasks dispatched per session before the coordinator stops and writes a handoff.",
+      "default": 5,
+      "min": 1,
+      "max": 50
+    },
+    "parallel_mode": {
+      "type": "string",
+      "title": "Parallel build mode",
+      "description": "auto picks worktree, shared or sequential from repository conditions. This version always runs sequentially and records why.",
+      "options": ["auto", "worktree", "shared", "sequential"],
+      "default": "auto"
+    },
+    "max_parallel": {
+      "type": "number",
+      "title": "Max parallel workers",
+      "description": "Upper bound on concurrently running build workers in parallel modes.",
+      "default": 2,
+      "min": 1,
+      "max": 8
+    },
+    "serial_globs": {
+      "type": "string",
+      "title": "Serial file patterns",
+      "description": "Comma-separated patterns for collision-prone files; tasks touching them always run alone.",
+      "default": "package.json,*lock*,*.lock,go.mod,go.sum,Cargo.toml,pyproject.toml,requirements*.txt,Gemfile*,*.config.*,.github/**,migrations/**,**/generated/**"
+    }
+  }
+}

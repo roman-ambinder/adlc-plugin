@@ -1,0 +1,12 @@
+{
+  "name": "adlc-marketplace",
+  "owner": { "name": "adlc contributors" },
+  "description": "Local marketplace for the adlc agentic development lifecycle plugin",
+  "plugins": [
+    {
+      "name": "adlc",
+      "source": "./plugins/adlc",
+      "description": "Agentic development lifecycle: discover, specify, plan, design, build, verify, review, release with approval gates"
+    }
+  ]
+}
