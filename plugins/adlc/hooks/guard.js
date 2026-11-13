@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 // PreToolUse guard. Emits only "deny" or "ask"; silence leaves the normal permission flow in charge.
+const fs = require('node:fs');
+const path = require('node:path');
 const { WRITE_TOOLS, readStdin, lifecycle, preToolDecision, roleOf, locate, workspaceOf, readBindings, updateBindings } = require('./common');
 const P = require('./patterns');
 const { entriesOverlap } = require('../lib/glob');
@@ -21,6 +23,22 @@ function decideWrite(input, ctx, binding) {
   const removed = [ti.old_string, ...edits.map((e) => e && e.old_string)].filter(Boolean).join('\n');
   if (P.TEST_FILE.test(rel) && P.TEST_DISABLE.test(added) && !P.TEST_DISABLE.test(removed)) {
     return deny(`this edit skips or narrows tests in ${rel} (skip/only). Fix the behaviour instead; if a test truly must be skipped, ask the user to make that change`);
+  }
+  if (P.TEST_FILE.test(rel)) {
+    // Deleting test cases is as good as skipping them: ask, so the user sees it. For Write, compare with the file on disk.
+    let before = removed;
+    let after = added;
+    if (ti.content !== undefined) {
+      try {
+        before = fs.readFileSync(path.resolve(input.cwd || ctx.root, String(target)), 'utf8');
+      } catch {
+        before = '';
+      }
+      after = ti.content;
+    }
+    if (P.countTests(before) > P.countTests(after)) {
+      return ask(`this edit removes test cases from ${rel} (${P.countTests(before)} before, ${P.countTests(after)} after); approve only if the tests are obsolete`);
+    }
   }
   const role = roleOf(input.agent_type);
   if (role === 'reviewer') return deny('the reviewer role is read-only');

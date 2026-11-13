@@ -232,3 +232,26 @@ test('guard denies reading secret files through Bash and the Read tool', () => {
   assert.equal(decision(hook('guard', read(path.join(root, 'certs/site.key')), root)), 'deny');
   assert.equal(decision(hook('guard', read(path.join(root, 'src/a.js')), root)), null);
 });
+
+test('guard asks before test cases are deleted and denies more skip forms', () => {
+  const root = project();
+  const edit = (o, n) => ({ hook_event_name: 'PreToolUse', tool_name: 'Edit', cwd: root, tool_input: { file_path: path.join(root, 'test/a.test.js'), old_string: o, new_string: n } });
+  assert.equal(decision(hook('guard', edit("it('a', f);\nit('b', g);", "it('a', f);"), root)), 'ask');
+  assert.equal(decision(hook('guard', edit("it('a', f);", "it('a', f);\nit('b', g);"), root)), null);
+  assert.equal(decision(hook('guard', edit("it('a', f)", "it.todo('a')"), root)), 'deny');
+  assert.equal(decision(hook('guard', edit('x', '@Disabled\nvoid x()'), root)), 'deny');
+  fs.mkdirSync(path.join(root, 'test'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'test/a.test.js'), "it('a', f);\nit('b', g);\n");
+  const write = (c) => ({ hook_event_name: 'PreToolUse', tool_name: 'Write', cwd: root, tool_input: { file_path: path.join(root, 'test/a.test.js'), content: c } });
+  assert.equal(decision(hook('guard', write("it('a', f);\n"), root)), 'ask');
+  assert.equal(decision(hook('guard', write("it('a', f);\nit('b', g);\nit('c', h);\n"), root)), null);
+});
+
+test('guard asks before package runners, container runs and find -delete', () => {
+  const root = project();
+  for (const cmd of ['npm exec foo', 'pnpm dlx foo', 'yarn dlx foo', 'bunx foo', 'uvx foo', 'docker run --rm x', 'find . -name "*.tmp" -delete', 'find . -exec rm {} +']) {
+    assert.equal(decision(hook('guard', bash(cmd), root)), 'ask', cmd);
+  }
+  assert.equal(decision(hook('guard', bash('find . -name "*.js"'), root)), null);
+  assert.equal(decision(hook('guard', bash('docker run x', {}), root, { CLAUDE_PLUGIN_OPTION_GUARD_LEVEL: 'standard' })), null);
+});

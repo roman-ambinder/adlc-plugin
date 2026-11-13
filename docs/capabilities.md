@@ -19,7 +19,7 @@ Status as of version 0.3.0 (Slices 1–3), 2026-11-13. "Tested" means covered by
 | Readiness gate before dispatch, leases, no duplicate dispatch, per-session task budget | `lib/dispatch.js` | `tests/workflow.test.js` |
 | Structured handoff validation; integration check (evidence matching, ownership, stop record); cross-task checks required before integration | `lib/integrate.js` | `tests/workflow.test.js`, `tests/cli.test.js` |
 | Guard hook (Bash guarding is pattern-based and best-effort; scripts and indirection can bypass it): protected state files, test-disabling edits, check bypasses, risky-command `ask`, user-only command `ask`, role write scopes, workers must claim before writing, worker scope, never `allow` | `hooks/guard.js` | `tests/hooks.test.js` |
-| Guard additions (2026-11-13 review): commands that mask an exit status (`\|\| true`, `; true`, `; exit 0`, `set +e`) are denied and `adlc run` refuses to record them; workers are denied inline interpreter code (`python -c`, `node -e`, …); secret files (`.env`, `*.pem`, `*.key`, `id_*`) are denied in Bash and Read; `integrate check` fails on files outside every task's writable set that were modified after dispatch | `lib/masking.js`, `hooks/patterns.js`, `hooks/guard.js`, `lib/integrate.js` | `tests/hooks.test.js`, `tests/evidence.test.js`, `tests/workflow.test.js` |
+| Guard additions (2026-11-13 review): commands that mask an exit status (`\|\| true`, `; true`, `; exit 0`, `set +e`) are denied and `adlc run` refuses to record them; workers are denied inline interpreter code (`python -c`, `node -e`, …); edits that delete test cases ask first, and `.todo`/`@Disabled`/`xfail`-style skips are denied; package runners (`npm exec`, `pnpm dlx`, `yarn dlx`, `bunx`, `uvx`) and `find -delete` ask, `docker run` asks in strict; secret files (`.env`, `*.pem`, `*.key`, `id_*`) are denied in Bash and Read; `integrate check` fails on files outside every task's writable set that were modified after dispatch | `lib/masking.js`, `hooks/patterns.js`, `hooks/guard.js`, `lib/integrate.js` | `tests/hooks.test.js`, `tests/evidence.test.js`, `tests/workflow.test.js` |
 | Audit, SubagentStop and SessionStart hooks; silence outside adlc projects | `hooks/*.js` | `tests/hooks.test.js` |
 | End-to-end walkthrough of one feature through every stage, using real CLI and hook scripts | `examples/slugify/run.sh` | `tests/e2e.test.js` |
 
@@ -102,6 +102,7 @@ Implemented, tested (`tests/worktree.test.js`, which uses real `git worktree`s) 
 | File writes made through the Bash tool cannot be attributed at write time | Detected afterwards by `integrate check`, using `git status` and the handoff's file list |
 | Token use and cost are not observable from hooks | Recorded as `"not observable"`; the controls are `maxTurns`, the task budget and repair limits |
 | `bin/` prevents installation on claude.ai and Cowork | Claude Code CLI and desktop only |
+| Weakened assertions in tests are not detected by hooks | The reviewer agent |
 | Bash guarding cannot stop scripts written with Write and run later, obfuscated commands (`eval`, variable indirection), or masking by pipes without `pipefail` | `integrate check` and the reviewer detect the effects afterwards |
 | Hook timeouts or crashes fail open at the platform level | Guard internal errors return `ask`; platform permission prompts still apply |
 

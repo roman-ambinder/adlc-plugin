@@ -33,7 +33,10 @@ function shellWriteTargets(cmd) {
 const SHELL_WRITE_OK = (target) => target === '/dev/null' || target === '/dev/stdout' || target === '/dev/stderr' || /(^|\/)\.agent-lifecycle\/tmp\//.test(target);
 
 const TEST_FILE = /(^|\/)(tests?|__tests__|spec|specs)\/|[._-](test|spec)\.[a-z0-9]+$|_test\.(go|py)$|(^|\/)test_[^/]*\.py$/i;
-const TEST_DISABLE = /(\b(it|test|describe)\.(skip|only)\s*\(|\bx(it|describe|test)\s*\(|@pytest\.mark\.skip|@unittest\.skip|\bt\.Skip\(|#\[ignore\]|\{\s*skip:\s*true)/;
+const TEST_DISABLE = /(\b(it|test|describe)\.(skip|only|todo)\s*\(|\bx(it|describe|test)\s*\(|@pytest\.mark\.(skip|xfail)|@unittest\.skip|\bpytest\.skip\(|\bt\.Skip\(|\bt\.skip\(|#\[ignore\]|@Disabled\b|@Ignore\b|\{\s*(skip|todo):\s*true)/;
+// Test-case declarations, counted to notice an edit that deletes tests.
+const TEST_DECL = /(\b(it|test)(\.\w+)?\s*\(|\bdef test_\w+|\bfunc Test\w+|@Test\b|#\[test\])/g;
+const countTests = (text) => (String(text || '').match(TEST_DECL) || []).length;
 
 const { masksExitStatus } = require('../lib/masking');
 
@@ -56,8 +59,10 @@ const RISKY = [
   { kind: 'git history or worktree change', standard: false, re: git(String.raw`(merge|rebase|cherry-pick|am|revert|stash|worktree\s+(add|remove|prune)|branch\s+-d)\b`) },
   { kind: 'GitHub CLI action (pull requests, releases, API)', standard: true, re: /\bgh\s+(pr|release|repo|api|workflow|issue)\b/ },
   { kind: 'dependency installation', standard: true, re: /\b(npm|pnpm|yarn|bun)\s+(i|install|add|ci|update|upgrade)\b|\bnpx\s|\bpip3?\s+install\b|\buv\s+(add|sync|pip\s+install)\b|\bpoetry\s+(add|install)\b|\bcargo\s+(add|install)\b|\bgo\s+(get|install)\b|\bbrew\s+install\b|\bgem\s+install\b|\bapt(-get)?\s+install\b/ },
+  { kind: 'package runner (downloads and runs code)', standard: true, re: /\b(npm\s+exec|pnpm\s+(dlx|exec)|yarn\s+dlx|bunx|pipx\s+run|uvx)\b/ },
+  { kind: 'container execution', standard: false, re: /\bdocker\s+(run|exec|compose\s+(up|run))\b/ },
   { kind: 'network or external service access', standard: true, re: /\b(curl|wget|ssh|scp|rsync|telnet|ftp)\b|\bnc\s/ },
-  { kind: 'destructive delete', standard: true, re: /\brm\s+-[a-zA-Z]*[rRf]/ },
+  { kind: 'destructive delete', standard: true, re: /\brm\s+-[a-zA-Z]*[rRf]|\bfind\b[^;&|\n]*(-delete\b|-exec\s+rm\b)/ },
   { kind: 'publishing', standard: true, re: /\b(npm|pnpm|yarn)\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b|\bgem\s+push\b/ },
   { kind: 'deployment', standard: true, re: /\bdocker\s+(push|login)\b|\bkubectl\s+(apply|delete|rollout|scale|patch)\b|\bterraform\s+(apply|destroy)\b|\bhelm\s+(install|upgrade|uninstall)\b|\b(npm|pnpm|yarn)\s+run\s+deploy\b|(^|[\s;&|/])deploy(\.sh)?(\s|$)/ },
 ];
@@ -67,4 +72,4 @@ function riskyKind(cmd, level = 'strict') {
   return null;
 }
 
-module.exports = { SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
+module.exports = { countTests, SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
