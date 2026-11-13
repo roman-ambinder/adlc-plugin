@@ -1,0 +1,164 @@
+{
+  "schema": 1,
+  "revision": 18,
+  "change": {
+    "id": "chg-20261113-add-slugify-utility",
+    "title": "Add slugify utility",
+    "type": "feature",
+    "created": "2026-11-13T20:29:47.333Z"
+  },
+  "stage": "done",
+  "stages": {
+    "discover": {
+      "status": "skipped",
+      "reason": "small change",
+      "ts": "2026-11-13T20:29:47.333Z"
+    },
+    "specify": {
+      "status": "completed",
+      "started": "2026-11-13T20:29:47.632Z",
+      "ended": "2026-11-13T20:29:48.371Z"
+    },
+    "plan": {
+      "status": "completed",
+      "started": "2026-11-13T20:29:48.553Z",
+      "ended": "2026-11-13T20:29:49.139Z"
+    },
+    "design": {
+      "status": "skipped",
+      "reason": "small change",
+      "ts": "2026-11-13T20:29:47.333Z"
+    },
+    "build": {
+      "status": "completed",
+      "started": "2026-11-13T20:29:49.713Z",
+      "ended": "2026-11-13T20:29:53.685Z"
+    },
+    "verify": {
+      "status": "completed",
+      "started": "2026-11-13T20:29:53.869Z",
+      "ended": "2026-11-13T20:29:54.986Z"
+    },
+    "review": {
+      "status": "completed",
+      "started": "2026-11-13T20:29:55.167Z",
+      "ended": "2026-11-13T20:29:55.556Z"
+    },
+    "release": {
+      "status": "completed",
+      "started": "2026-11-13T20:29:55.790Z",
+      "ended": "2026-11-13T20:29:56.360Z"
+    }
+  },
+  "contracts": [],
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Implement slugify with tests",
+      "goal": "Add src/slugify.js exporting slugify(text) and tests covering AC-1..AC-3",
+      "status": "integrated",
+      "deps": [],
+      "contracts": {
+        "provides": [],
+        "consumes": []
+      },
+      "files": [
+        "src/slugify.js",
+        "test/slugify.test.js"
+      ],
+      "reads": [
+        "package.json"
+      ],
+      "resources": [],
+      "size": "S",
+      "coupled": false,
+      "checks": [
+        "node --test test/slugify.test.js"
+      ],
+      "ac": [
+        "AC-1",
+        "AC-2",
+        "AC-3"
+      ],
+      "attempts": 0,
+      "max_attempts": 3,
+      "timing": {
+        "dispatched_at": "2026-11-13T20:29:49.909Z",
+        "returned_at": "2026-11-13T20:29:52.277Z",
+        "integrated_at": "2026-11-13T20:29:53.505Z"
+      }
+    }
+  ],
+  "execution": {
+    "mode": "sequential",
+    "resolved_from": "auto",
+    "max_parallel": 2,
+    "reasons": [
+      "auto requested; fewer than two tasks, so sequential"
+    ],
+    "waves": [
+      [
+        "T1"
+      ]
+    ],
+    "integration_order": [
+      "T1"
+    ],
+    "plan_hash": "07003ce47baf9fa67c358a28c4dd74716a169e7b7971301824d89c67d558ac59"
+  },
+  "leases": [
+    {
+      "task": "T1",
+      "lease": "L-c72358",
+      "session": "e2e-session",
+      "agent_id": null,
+      "workspace": null,
+      "status": "returned",
+      "started": "2026-11-13T20:29:49.909Z",
+      "ended": "2026-11-13T20:29:52.277Z"
+    }
+  ],
+  "metrics": {
+    "retries": 0,
+    "integration_failures": 0,
+    "tokens": "not observable",
+    "cost": "not observable"
+  },
+  "budget": {
+    "max_repair_attempts": 3,
+    "max_tasks_per_run": 5,
+    "tasks_this_run": 1,
+    "session": "e2e-session"
+  },
+  "config": {
+    "approval_gates": [
+      "plan",
+      "release"
+    ],
+    "serial_globs": [
+      "package.json",
+      "*lock*",
+      "*.lock",
+      "go.mod",
+      "go.sum",
+      "Cargo.toml",
+      "pyproject.toml",
+      "requirements*.txt",
+      "Gemfile*",
+      "*.config.*",
+      ".github/**",
+      "migrations/**",
+      "**/generated/**"
+    ]
+  },
+  "reviews": [
+    {
+      "file": "reviews/20261113202955.md",
+      "blocking": 0,
+      "optional": 1,
+      "ts": "2026-11-13T20:29:55.356Z"
+    }
+  ],
+  "blocker": null,
+  "updated": "2026-11-13T20:29:56.360Z"
+}

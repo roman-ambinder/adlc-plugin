@@ -1,0 +1,24 @@
+{
+  "task": "T1",
+  "status": "done",
+  "workspace": "/path/to/demo-repo",
+  "branch": null,
+  "files_changed": [
+    "src/slugify.js",
+    "test/slugify.test.js"
+  ],
+  "summary": "Added slugify(text) with tests for AC-1..AC-3.",
+  "checks": [
+    {
+      "cmd": "node --test test/slugify.test.js",
+      "exit": 0,
+      "evidence": "test-results/E-20261113202951653-ef3b44-build-T1.md"
+    }
+  ],
+  "interface_changes": [
+    "new module src/slugify.js exporting slugify(text: string): string"
+  ],
+  "blockers": [],
+  "integration_notes": "No dependencies added.",
+  "out_of_scope": []
+}
