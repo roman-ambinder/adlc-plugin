@@ -247,4 +247,4 @@ npm run validate
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
