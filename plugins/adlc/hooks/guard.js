@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 // PreToolUse guard. Emits only "deny" or "ask"; silence leaves the normal permission flow in charge.
-const { WRITE_TOOLS, readStdin, lifecycle, preToolDecision, roleOf, relPath, readBindings, updateBindings } = require('./common');
+const { WRITE_TOOLS, readStdin, lifecycle, preToolDecision, roleOf, locate, workspaceOf, readBindings, updateBindings } = require('./common');
 const P = require('./patterns');
 const { entriesOverlap } = require('../lib/glob');
 
@@ -14,7 +14,7 @@ function decideWrite(input, ctx, binding) {
   const ti = input.tool_input || {};
   const target = ti.file_path || ti.notebook_path;
   if (!target) return null;
-  const rel = relPath(ctx, input, target);
+  const { path: rel, workspace } = locate(ctx, input, target);
   if (P.PROTECTED_PATH.test(rel)) return deny(`${rel} is managed by the adlc CLI and hooks; change it only through adlc commands`);
   const edits = Array.isArray(ti.edits) ? ti.edits : [];
   const added = [ti.content, ti.new_string, ti.new_source, ...edits.map((e) => e && e.new_string)].filter(Boolean).join('\n');
@@ -29,6 +29,11 @@ function decideWrite(input, ctx, binding) {
   if (WORKER_ROLES.includes(role)) {
     const mode = (ctx.state && ctx.state.execution && ctx.state.execution.mode) || 'sequential';
     if (binding) {
+      if (mode === 'worktree') {
+        if (!workspace) return deny(`worktree mode: write inside your own git worktree, not the main checkout (attempted ${rel})`);
+        const own = workspaceOf(ctx, binding.cwd);
+        if (own && own !== workspace) return deny(`worktree mode: ${binding.task} may write only inside its own worktree (${own})`);
+      }
       const task = ((ctx.state && ctx.state.tasks) || []).find((t) => t.id === binding.task);
       const allowed = rel.startsWith('.agent-lifecycle/tmp/') || Boolean(task && task.files.some((g) => entriesOverlap(g, rel)));
       if (!allowed) return deny(`task ${binding.task} may only write its packet files (${task ? task.files.join(', ') : 'unknown task'}); ${rel} is outside. Report it under out_of_scope in your handoff`);

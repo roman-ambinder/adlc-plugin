@@ -63,7 +63,7 @@ test('full sequential build through the CLI', () => {
   const root = tmpdir();
   toBuild(root, [TASK({ checks: ['test -f src/a.js'] })]);
   const lease = JSON.parse(ok(cli(root, ['dispatch', 'start', 'T1', '--session', 's1', '--json'])));
-  assert.match(ok(cli(root, ['worker', 'claim', 'T1', '--lease', lease.lease])), /writable files: src\/a\.js/);
+  assert.match(ok(cli(root, ['worker', 'claim', 'T1', '--lease', lease.lease])), /writable files \(relative to your working directory\): src\/a\.js/);
   assert.equal(cli(root, ['worker', 'claim', 'T1', '--lease', 'L-000000']).status, 2);
   writeFile(root, 'src/a.js', 'module.exports = 1;\n');
   const ev = JSON.parse(ok(cli(root, ['run', '--stage', 'build', '--task', 'T1', '--json', '--', 'test -f src/a.js'])));

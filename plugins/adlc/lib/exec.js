@@ -6,6 +6,7 @@ const { sha256, atomicWrite, replaceSection } = require('./fsutil');
 const { prereqs, canonicalTasks } = require('./tasks');
 const { isGlob, globToRegExp, entriesOverlap, setsOverlap } = require('./glob');
 const { rule } = require('./errors');
+const { worktreeProblems } = require('./worktree');
 
 // Serial patterns without "/" match basenames anywhere. Glob writable entries are treated as serial (conservative).
 function serialMatch(pattern, file) {
@@ -65,7 +66,7 @@ function planHash(s) {
 
 // Shared mode needs hooks to see each subagent's agent_id (documented, and confirmed live on Claude Code 2.1.311).
 // If agent_id were missing, unbound workers are denied every write, so the failure is safe and visible.
-function resolveMode(root, s) {
+function resolveMode(root, s, opts = {}) {
   const requested = s.execution.resolved_from;
   const seq = (reason) => ({ mode: 'sequential', reasons: [reason] });
   if (requested === 'sequential') return seq('sequential mode configured');
@@ -76,10 +77,10 @@ function resolveMode(root, s) {
   const useful = waves.findIndex((w) => w.filter((id) => byId.get(id).size !== 'S' && !byId.get(id).coupled).length >= 2);
   if (useful === -1) return seq(`${requested} requested; no wave has two independent tasks of size M or L, so parallelism would not pay off`);
   const reasons = [`independent tasks found (wave ${useful + 1}: ${waves[useful].join(', ')})`];
-  if (requested === 'worktree') reasons.push('worktree mode is not available in this version; using the shared checkout with disjoint writable files');
-  else if (requested === 'auto') reasons.push('worktree mode is not available in this version, so auto uses the shared checkout with disjoint writable files');
-  else reasons.push('shared checkout with disjoint writable files');
-  return { mode: 'shared', reasons };
+  if (requested === 'shared') return { mode: 'shared', reasons: [...reasons, 'shared checkout with disjoint writable files'] };
+  const wt = opts.worktreeProblems ? opts.worktreeProblems : worktreeProblems(root);
+  if (!wt.length) return { mode: 'worktree', reasons: [...reasons, 'each worker gets its own git worktree; the coordinator commits and merges them in integration order'] };
+  return { mode: 'shared', reasons: [...reasons, `worktree mode unavailable (${wt.join('; ')}), so the shared checkout with disjoint writable files is used`] };
 }
 
 function writePlanSections(root, s) {

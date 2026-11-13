@@ -368,7 +368,9 @@ const handlers = {
       const session = typeof flags.session === 'string' && !flags.session.includes('${') ? flags.session : 'unknown';
       return st.mutate(root, (s) => {
         const lease = dispatch.startDispatch(root, s, id, { session });
-        return { obj: lease, text: `dispatched ${id} lease ${lease.lease}; packet: .agent-lifecycle/packets/${id}.md` };
+        const packet = packets.packetPath(root, id);
+        const agent = s.execution.mode === 'worktree' ? 'adlc:developer-worktree' : 'adlc:developer';
+        return { obj: { ...lease, packet, agent }, text: `dispatched ${id} lease ${lease.lease}\npacket: ${packet}\nworker agent: ${agent}` };
       });
     }
     throw usage('usage: adlc dispatch check|ready|start');
@@ -383,8 +385,8 @@ const handlers = {
       const lease = s.leases.find((l) => l.lease === leaseId);
       if (!lease || lease.task !== id || lease.status !== 'active') throw rule(`lease ${leaseId} is not an active lease for ${id}; stop and report this to the coordinator`);
       const t = tasks.getTask(s, id);
-      const o = { task: id, lease: leaseId, packet: `.agent-lifecycle/packets/${id}.md`, files: t.files, checks: t.checks };
-      return { obj: o, text: `claimed ${id} (${leaseId})\npacket: ${o.packet}\nwritable files: ${t.files.join(', ')}\nchecks: ${t.checks.join(' ; ')}` };
+      const o = { task: id, lease: leaseId, packet: packets.packetPath(root, id), state_root: root, files: t.files, checks: t.checks };
+      return { obj: o, text: `claimed ${id} (${leaseId})\npacket: ${o.packet}\nwritable files (relative to your working directory): ${t.files.join(', ')}\nchecks: ${t.checks.join(' ; ')}` };
     }
     if (sub === 'handoff') {
       const f = integrate.submitHandoff(root, s, id, readJsonFile(flags.file));
@@ -399,12 +401,13 @@ const handlers = {
     if (sub === 'check') {
       return st.mutate(root, (s) => {
         const r = integrate.integrateCheck(root, s, id);
-        if (r.ok) integrate.recordReturned(s, id);
+        if (r.ok) integrate.recordReturned(s, id, r);
         const text = [
           r.ok ? `${id} passed the integration check` : `${id} failed the integration check:`,
           ...r.problems.map((x) => `- ${x}`),
           ...r.warnings.map((x) => `warning: ${x}`),
-          r.ok ? `next: run each cross-task check with adlc run --stage build -- "<cmd>", then adlc integrate done ${id}:\n${r.cross_checks.map((c) => `  ${c}`).join('\n')}` : '',
+          r.ok && r.commands ? `next: ask the user to approve and run these exact commands (commit in the worktree, then merge into the current branch):\n${r.commands.map((c) => `  ${c}`).join('\n')}` : '',
+          r.ok ? `${r.commands ? 'then' : 'next:'} run each cross-task check with adlc run --stage build -- "<cmd>", then adlc integrate done ${id}:\n${r.cross_checks.map((c) => `  ${c}`).join('\n')}` : '',
         ].filter(Boolean).join('\n');
         return { obj: r, text, exit: r.ok ? EXIT.OK : EXIT.RULE };
       });

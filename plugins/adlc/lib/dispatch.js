@@ -8,6 +8,7 @@ const { packetProblems, writePackets } = require('./packets');
 const { prereqs, getTask, repairTask } = require('./tasks');
 const { isSerial, conflicts, planHash } = require('./exec');
 const { usage, rule } = require('./errors');
+const { worktreeProblems } = require('./worktree');
 
 function activeLeases(s) {
   return s.leases.filter((l) => l.status === 'active');
@@ -58,6 +59,9 @@ function checkDispatch(root, s, id) {
     if (conflicts(t, o)) problems.push(`writable files or resources overlap with active task ${o.id}`);
   }
   if (active.length && (isSerial(s, t) || active.some((l) => isSerial(s, getTask(s, l.task))))) problems.push('serial task cannot run alongside other tasks');
+  if (s.execution.mode === 'worktree') {
+    for (const x of worktreeProblems(root)) problems.push(`worktree mode precondition: ${x}`);
+  }
   if (s.budget.tasks_this_run >= s.budget.max_tasks_per_run) problems.push(`task budget for this run reached (${s.budget.max_tasks_per_run}); stop and resume in a new session`);
   return problems;
 }

@@ -9,6 +9,7 @@ const { getTask } = require('./tasks');
 const { entriesOverlap } = require('./glob');
 const { hasStopped, leaseFor, endLease } = require('./dispatch');
 const { rule } = require('./errors');
+const wt = require('./worktree');
 
 const HANDOFF_STATUSES = ['done', 'blocked', 'partial'];
 
@@ -98,18 +99,55 @@ function integrateCheck(root, s, id) {
   const changed = new Set([...(lease ? attributedWrites(root, lease) : []), ...(h && Array.isArray(h.files_changed) ? h.files_changed : [])]);
   const outside = [...changed].filter((f) => !f.startsWith('.agent-lifecycle/tmp/') && !t.files.some((g) => entriesOverlap(g, f)));
   if (outside.length) problems.push(`changed files outside ${id}'s writable set: ${outside.join(', ')}`);
-  const git = gitChanged(root);
+  let worktree = null;
+  if (s.execution.mode === 'worktree') {
+    worktree = worktreeDetails(root, t, h, problems);
+    for (const f of worktree ? worktree.changed : []) changed.add(f);
+    const outsideWt = worktree ? worktree.changed.filter((f) => !t.files.some((g) => entriesOverlap(g, f))) : [];
+    if (outsideWt.length) problems.push(`worktree changes outside ${id}'s writable set: ${outsideWt.join(', ')}`);
+  }
+  const git = s.execution.mode === 'worktree' ? null : gitChanged(root);
   if (git) {
     const owned = s.tasks.filter((x) => !['todo', 'blocked'].includes(x.status)).flatMap((x) => x.files);
     const stray = git.filter((f) => !owned.some((g) => entriesOverlap(g, f)));
     if (stray.length) warnings.push(`uncommitted changes not owned by any dispatched or integrated task: ${stray.join(', ')}`);
   }
-  return { ok: problems.length === 0, problems, warnings, changed: [...changed], cross_checks: crossChecks(s, id) };
+  const result = { ok: problems.length === 0, problems, warnings, changed: [...changed], cross_checks: crossChecks(s, id) };
+  if (worktree) Object.assign(result, { workspace: worktree.workspace, branch: worktree.branch, base: worktree.base, commands: worktree.commands });
+  return result;
 }
 
-function recordReturned(s, id) {
+function shellQuote(s) {
+  return `'${String(s).replace(/'/g, `'\\''`)}'`;
+}
+
+// Worktree mode: the handoff's workspace must be a linked worktree of this repository with only the task's changes.
+function worktreeDetails(root, t, h, problems) {
+  if (!h || typeof h.workspace !== 'string') return null;
+  const linked = wt.linkedWorktree(h.workspace);
+  if (!linked || linked.mainRoot !== fs.realpathSync(root)) {
+    problems.push(`handoff workspace ${h.workspace} is not a git worktree of this repository`);
+    return null;
+  }
+  const workspace = linked.worktreeRoot;
+  const branch = wt.branchOf(workspace);
+  if (!branch) problems.push(`worktree ${workspace} is not on a branch`);
+  const changed = wt.dirtyPaths(workspace) || [];
+  if (!changed.length) problems.push(`worktree ${workspace} has no uncommitted changes to integrate`);
+  const files = changed.map(shellQuote).join(' ');
+  const commands = branch && changed.length ? [
+    `git -C ${shellQuote(workspace)} add -- ${files}`,
+    `git -C ${shellQuote(workspace)} commit -m ${shellQuote(`adlc(${t.id}): ${t.title}`)}`,
+    `git merge --no-ff ${shellQuote(branch)} -m ${shellQuote(`adlc: integrate ${t.id} (${t.title})`)}`,
+  ] : [];
+  const base = wt.git(workspace, ['rev-parse', 'HEAD']).out || null;
+  return { workspace, branch, base, changed, commands };
+}
+
+function recordReturned(s, id, details = {}) {
   const t = getTask(s, id);
   const lease = leaseFor(s, id);
+  if (lease && details.workspace) Object.assign(lease, { workspace: details.workspace, branch: details.branch, base: details.base });
   t.status = 'returned';
   t.timing = { ...t.timing, returned_at: now() };
   if (lease && lease.status === 'active') endLease(lease, 'returned');
@@ -118,11 +156,24 @@ function recordReturned(s, id) {
 function integrateDone(root, s, id) {
   const t = getTask(s, id);
   if (t.status !== 'returned') throw rule(`task ${id} is ${t.status}; run \`adlc integrate check ${id}\` first`);
-  const ev = evidence.list(root).filter((e) => e.ts >= t.timing.returned_at);
   const problems = [];
+  let since = t.timing.returned_at;
+  if (s.execution.mode === 'worktree') {
+    const lease = [...s.leases].reverse().find((l) => l.task === id && l.branch);
+    if (!lease) problems.push(`no worktree branch recorded for ${id}; run \`adlc integrate check ${id}\``);
+    else if (wt.git(root, ['rev-parse', lease.branch]).out === lease.base || (wt.dirtyPaths(lease.workspace) || []).length) {
+      problems.push(`the changes in ${lease.workspace} are not committed yet: run the commit and merge commands printed by \`adlc integrate check ${id}\``);
+    } else if (!wt.isAncestor(root, lease.branch)) problems.push(`branch ${lease.branch} is not merged into the current branch yet: run the commit and merge commands printed by \`adlc integrate check ${id}\``);
+    else {
+      const head = wt.git(root, ['log', '-1', '--format=%cI', 'HEAD']).out;
+      const headIso = head ? new Date(head).toISOString() : since;
+      if (headIso > since) since = headIso;
+    }
+  }
+  const ev = evidence.list(root).filter((e) => e.ts >= since);
   for (const cmd of crossChecks(s, id)) {
     const last = ev.filter((e) => e.cmd === cmd).pop();
-    if (!last) problems.push(`cross-task check "${cmd}" has not been run since ${id} returned (run: adlc run --stage build -- "${cmd}")`);
+    if (!last) problems.push(`cross-task check "${cmd}" has not been run since ${id} ${s.execution.mode === 'worktree' ? 'was merged' : 'returned'} (run: adlc run --stage build -- "${cmd}")`);
     else if (last.exit !== 0) problems.push(`cross-task check "${cmd}" failed (exit ${last.exit}, ${last.file})`);
   }
   if (problems.length) throw rule(`cannot integrate ${id}:\n- ${problems.join('\n- ')}\nIf a check failed, run \`adlc task repair ${id} "<reason>"\`.`);
