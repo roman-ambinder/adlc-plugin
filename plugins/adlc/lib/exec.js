@@ -63,12 +63,23 @@ function planHash(s) {
   }));
 }
 
-// Slice 1: parallel modes are not implemented, so every request resolves to sequential with a recorded reason.
+// Shared mode needs hooks to see each subagent's agent_id (documented, and confirmed live on Claude Code 2.1.311).
+// If agent_id were missing, unbound workers are denied every write, so the failure is safe and visible.
 function resolveMode(root, s) {
   const requested = s.execution.resolved_from;
-  if (requested === 'sequential') return { mode: 'sequential', reasons: ['sequential mode configured'] };
-  if (s.tasks.length < 2) return { mode: 'sequential', reasons: [`${requested} requested; fewer than two tasks, so sequential`] };
-  return { mode: 'sequential', reasons: [`${requested} requested, but parallel execution is not available in this version of adlc`] };
+  const seq = (reason) => ({ mode: 'sequential', reasons: [reason] });
+  if (requested === 'sequential') return seq('sequential mode configured');
+  if (s.tasks.length < 2) return seq(`${requested} requested; fewer than two tasks, so sequential`);
+  if (s.execution.max_parallel < 2) return seq(`${requested} requested; max_parallel is 1, so sequential`);
+  const { waves } = computeWaves(s, s.execution.max_parallel);
+  const byId = new Map(s.tasks.map((t) => [t.id, t]));
+  const useful = waves.findIndex((w) => w.filter((id) => byId.get(id).size !== 'S' && !byId.get(id).coupled).length >= 2);
+  if (useful === -1) return seq(`${requested} requested; no wave has two independent tasks of size M or L, so parallelism would not pay off`);
+  const reasons = [`independent tasks found (wave ${useful + 1}: ${waves[useful].join(', ')})`];
+  if (requested === 'worktree') reasons.push('worktree mode is not available in this version; using the shared checkout with disjoint writable files');
+  else if (requested === 'auto') reasons.push('worktree mode is not available in this version, so auto uses the shared checkout with disjoint writable files');
+  else reasons.push('shared checkout with disjoint writable files');
+  return { mode: 'shared', reasons };
 }
 
 function writePlanSections(root, s) {

@@ -1,6 +1,6 @@
 # adlc capabilities — implemented, tested, unsupported
 
-Status as of version 0.1.0 (Slice 1), 2026-11-13. "Tested" means covered by `npm test` (92 tests, all passing at the time of writing) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
+Status as of version 0.2.0 (Slices 1–2), 2026-11-13. "Tested" means covered by `npm test` (95 tests, all passing at the time of writing) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
 
 ## Implemented and tested
 
@@ -49,13 +49,23 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 
 Set `ADLC_HOOK_LOG=<file>` to record hook metadata (event, tool, `agent_id`, `agent_type`, session, cwd; never tool input) when diagnosing.
 
-## Designed, not implemented yet (Slices 2–3)
+## Shared-checkout parallel build (Slice 2)
 
-- `shared` parallel mode: several background workers in one checkout with disjoint files, serialized check runs, and a binding probe confirming `agent_id`.
-- `worktree` parallel mode: `developer-worktree` agent with `isolation: worktree`, `worktree.baseRef: "head"` precondition, coordinator-run commit and merge in integration order.
-- Rolling background dispatch across waves.
+Implemented, tested (`tests/parallel.test.js`, `tests/workflow.test.js`) and live-tested.
 
-Until then every `parallel_mode` value runs sequentially, and the reason is recorded in `state.json` and `plan.md`.
+- `auto` (and `shared`) resolve to `shared` when some wave has at least two independent tasks of size M or L with disjoint files and resources; otherwise `sequential`, with the reason recorded.
+- The coordinator launches all ready workers in one message, so they run concurrently. Check runs are serialized through `.check.lock`.
+- Each worker is bound to its lease by `agent_id`, may write only its own files, and is released by its SubagentStop record.
+- **Live test** (2026-11-13, Sonnet, $0.28). Two independent tasks, `slugify` and `titleCase`:
+  - two `adlc:developer` workers ran at the same time, with overlapping write timestamps;
+  - both were bound and both stop records carried their lease;
+  - both tasks were integrated with no manual stop confirmation;
+  - the worker check runs did not overlap.
+- No separate binding probe is needed. Hooks inside subagents receive `agent_id`; this is documented, and the live test confirmed it. If `agent_id` were ever missing, unbound workers are denied every write, so the failure is safe and visible.
+
+## Designed, not implemented yet (Slice 3)
+
+- `worktree` mode: `developer-worktree` agent with `isolation: worktree`, `worktree.baseRef: "head"` precondition, and coordinator-run commit and merge in integration order. Until then `worktree` falls back to `shared` with the reason recorded.
 
 ## Unsupported by the platform (limitations and workarounds)
 
@@ -75,6 +85,7 @@ Until then every `parallel_mode` value runs sequentially, and the reason is reco
 - `guard_level: standard` still asks for commits, pushes, PRs, installs, network access, destructive commands, publishing and deploying, because the safety rules require approval for all of them. `strict` adds merge, rebase, worktree and other history edits.
 - The reviewer agent has no Write or Edit tools. The coordinator saves the reviewer's report unchanged and records it with `adlc review add`.
 - `developer-worktree.md` (spec §6.2 and §8) is deferred to Slice 3, together with worktree mode.
+- The spec's binding probe (`adlc probe`, §6.7) was not built; it is unnecessary given documented and live-confirmed `agent_id` (see above).
 - Workers must run `adlc worker claim` before writing in every mode, not only in parallel modes, so every worker write is attributed.
 - `adlc task update`, `adlc lease stopped`, `adlc trace` and `adlc archive` were added during implementation.
 - Tests for Tasks 4–11 were written alongside the code rather than strictly before it.
