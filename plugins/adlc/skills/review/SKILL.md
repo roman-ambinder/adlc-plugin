@@ -1,0 +1,11 @@
+---
+description: Run the adlc Review stage - an independent review of the change against requirements, security and maintainability - and record findings. Use after verify or when the user asks for a review.
+---
+
+Read `${CLAUDE_PLUGIN_ROOT}/skills/coordinator/SKILL.md` first and follow it.
+
+1. `adlc stage start review`.
+2. Collect the changed files (`git status --short` and `git diff --stat`), and paths to requirements.md, decisions.md, packets/ and test-results/.
+3. Delegate to `adlc:reviewer`: "Review change <id> independently. Requirements: .agent-lifecycle/requirements.md. Decisions: .agent-lifecycle/decisions.md. Packets: .agent-lifecycle/packets/. Evidence: .agent-lifecycle/test-results/. Changed files: <list>. Use the format in ${CLAUDE_PLUGIN_ROOT}/templates/review.md. Separate blocking findings (correctness, security, requirement gaps, missing or weakened tests) from optional improvements, each with file:line and reasoning."
+4. Save the reviewer's report unchanged to `.agent-lifecycle/tmp/review.md`. Do not soften or drop findings. Count blocking and optional findings and run `adlc review add --file .agent-lifecycle/tmp/review.md --blocking <N> --optional <M>`.
+5. If there are blocking findings: show them. If the user disputes one, let the user decide. For each accepted finding, run `adlc task repair <T> "<finding>"` on the responsible task (this reopens build), then stop. Otherwise run `adlc stage complete review`.

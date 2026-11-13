@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(adlc status)", "Bash(adlc status *)", "Bash(adlc next)", "Bash(adlc next *)",
+      "Bash(adlc stage *)", "Bash(adlc task *)", "Bash(adlc contract *)", "Bash(adlc packet *)",
+      "Bash(adlc exec *)", "Bash(adlc gate *)", "Bash(adlc hash *)", "Bash(adlc run *)",
+      "Bash(adlc review *)", "Bash(adlc trace)", "Bash(adlc dispatch *)", "Bash(adlc worker *)",
+      "Bash(adlc integrate *)", "Bash(adlc handoff *)"
+    ],
+    "ask": [
+      "Bash(git commit *)", "Bash(git push *)", "Bash(gh pr *)", "Bash(npm install *)", "Bash(npm publish *)"
+    ],
+    "deny": [
+      "Read(./.env)", "Read(./.env.*)", "Read(./**/*.pem)", "Read(./**/*.key)", "Read(./**/id_rsa*)"
+    ]
+  }
+}
