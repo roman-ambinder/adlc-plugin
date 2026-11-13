@@ -139,14 +139,32 @@ test('a dependency cycle through contracts is reported', () => {
   assert.throws(() => exec.computeWaves(s, 2), /dependency cycle among tasks: T1, T2/);
 });
 
-test('auto resolves to sequential in this version with a recorded reason', () => {
+test('auto resolves to shared when a wave has two independent M/L tasks, and records why', () => {
   const { root, s } = planned([TASK(), TASK({ files: ['src/b.js'] })]);
-  assert.equal(s.execution.mode, 'sequential');
-  assert.match(s.execution.reasons[0], /auto requested, but parallel execution is not available/);
+  assert.equal(s.execution.mode, 'shared');
+  assert.match(s.execution.reasons[0], /independent tasks found \(wave 1: T1, T2\)/);
+  assert.match(s.execution.reasons[1], /worktree mode is not available/);
+  assert.deepEqual(s.execution.waves, [['T1', 'T2']]);
   const plan = fs.readFileSync(path.join(root, '.agent-lifecycle/plan.md'), 'utf8');
-  assert.match(plan, /- mode: sequential \(requested: auto/);
+  assert.match(plan, /- mode: shared \(requested: auto/);
   assert.match(plan, /\*\*T2\*\* Task — files: src\/b\.js/);
   assert.match(plan, /## Context/, 'human sections are preserved');
+});
+
+test('mode resolution falls back to sequential with a reason', () => {
+  const cases = [
+    [[TASK()], /fewer than two tasks/],
+    [[TASK({ size: 'S' }), TASK({ size: 'S', files: ['src/b.js'] })], /no wave has two independent tasks/],
+    [[TASK(), TASK({ files: ['src/b.js'], deps: ['T1'] })], /no wave has two independent tasks/],
+    [[TASK(), TASK({ files: ['src/a.js'] })], /no wave has two independent tasks/],
+  ];
+  for (const [list, reason] of cases) {
+    const { s } = planned(list);
+    assert.equal(s.execution.mode, 'sequential');
+    assert.match(s.execution.reasons[0], reason);
+  }
+  const one = planned([TASK(), TASK({ files: ['src/b.js'] })], { max: 1 });
+  assert.match(one.s.execution.reasons[0], /max_parallel is 1/);
 });
 
 test('dispatch check lists every failing reason', () => {
@@ -159,7 +177,7 @@ test('dispatch check lists every failing reason', () => {
 });
 
 test('dispatch start creates one lease, renders the packet and prevents duplicates', () => {
-  const { root, s } = planned([TASK(), TASK({ files: ['src/b.js'] })]);
+  const { root, s } = planned([TASK(), TASK({ files: ['src/b.js'] })], { mode: 'sequential' });
   assert.deepEqual(dispatch.readyToDispatch(root, s).map((t) => t.id), ['T1']);
   const lease = dispatch.startDispatch(root, s, 'T1', { session: 'sess-1' });
   assert.match(lease.lease, /^L-[0-9a-f]{6}$/);
@@ -195,7 +213,7 @@ test('readyToDispatch only parallelises non-trivial tasks', () => {
 });
 
 test('a new session resets the per-run task budget', () => {
-  const { root, s } = planned([TASK(), TASK({ files: ['src/b.js'] })]);
+  const { root, s } = planned([TASK(), TASK({ files: ['src/b.js'] })], { mode: 'sequential' });
   s.budget.max_tasks_per_run = 1;
   dispatch.startDispatch(root, s, 'T1', { session: 'a' });
   s.leases[0].status = 'returned';
