@@ -195,3 +195,40 @@ test('git global options do not hide risky subcommands', () => {
   }
   assert.equal(decision(hook('guard', bash('git -C /w status --short'), root)), null);
 });
+
+test('guard denies commands that mask a check\'s exit status, including inside adlc run', () => {
+  const root = project();
+  for (const cmd of ['npm run lint || true', 'npm run check || true', 'npm test ; true', 'npm test; exit 0', 'pytest || echo ignored', 'set +e; npm test',
+    'adlc run --stage verify -- "make all || true"', 'adlc run --stage verify -- "./check.sh; exit 0"']) {
+    assert.equal(decision(hook('guard', bash(cmd), root)), 'deny', cmd);
+  }
+  for (const cmd of ['npm test', 'npm test || exit 1', 'rm -f x || true', 'adlc run --stage verify -- "npm test"']) {
+    assert.notEqual(decision(hook('guard', bash(cmd), root)), 'deny', cmd);
+  }
+});
+
+test('workers cannot write files through inline interpreter code', () => {
+  const root = project({ lease: true });
+  const who = { agent_id: 'agent-i', agent_type: 'adlc:developer', cwd: root };
+  for (const cmd of ["python3 -c \"open('src/a.js','w').write('x')\"", "node -e \"require('fs').writeFileSync('src/a.js','x')\"", "perl -e 'open F,\">src/a.js\"'"]) {
+    assert.equal(decision(hook('guard', bash(cmd, who), root)), 'deny', cmd);
+  }
+  for (const cmd of ['node --test test/a.test.js', 'node -r ts-node/register test/a.test.js', 'python3 -m pytest']) {
+    assert.equal(decision(hook('guard', bash(cmd, who), root)), null, cmd);
+  }
+  assert.equal(decision(hook('guard', bash("node -e \"console.log(1)\""), root)), null, 'the main session is not restricted this way');
+});
+
+test('guard denies reading secret files through Bash and the Read tool', () => {
+  const root = project();
+  for (const cmd of ['cat .env', 'grep KEY .env.local', 'head -n1 ./config/server.pem', 'cp ~/.ssh/id_rsa /tmp/x', 'source .env']) {
+    assert.equal(decision(hook('guard', bash(cmd), root)), 'deny', cmd);
+  }
+  for (const cmd of ['cat .env.example', 'git add .env', 'ls', 'cat src/environment.js']) {
+    assert.equal(decision(hook('guard', bash(cmd), root)), null, cmd);
+  }
+  const read = (f) => ({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: root, tool_input: { file_path: f } });
+  assert.equal(decision(hook('guard', read(path.join(root, '.env')), root)), 'deny');
+  assert.equal(decision(hook('guard', read(path.join(root, 'certs/site.key')), root)), 'deny');
+  assert.equal(decision(hook('guard', read(path.join(root, 'src/a.js')), root)), null);
+});

@@ -1,6 +1,6 @@
 # adlc capabilities — implemented, tested, unsupported
 
-Status as of version 0.3.0 (Slices 1–3), 2026-11-13. "Tested" means covered by `npm test` (101 tests, all passing at the time of writing) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
+Status as of version 0.3.0 (Slices 1–3), 2026-11-13. "Tested" means covered by `npm test` (all passing at the time of writing; the count is not recorded here so it cannot drift) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
 
 ## Implemented and tested
 
@@ -19,6 +19,7 @@ Status as of version 0.3.0 (Slices 1–3), 2026-11-13. "Tested" means covered by
 | Readiness gate before dispatch, leases, no duplicate dispatch, per-session task budget | `lib/dispatch.js` | `tests/workflow.test.js` |
 | Structured handoff validation; integration check (evidence matching, ownership, stop record); cross-task checks required before integration | `lib/integrate.js` | `tests/workflow.test.js`, `tests/cli.test.js` |
 | Guard hook (Bash guarding is pattern-based and best-effort; scripts and indirection can bypass it): protected state files, test-disabling edits, check bypasses, risky-command `ask`, user-only command `ask`, role write scopes, workers must claim before writing, worker scope, never `allow` | `hooks/guard.js` | `tests/hooks.test.js` |
+| Guard additions (2026-11-13 review): commands that mask an exit status (`\|\| true`, `; true`, `; exit 0`, `set +e`) are denied and `adlc run` refuses to record them; workers are denied inline interpreter code (`python -c`, `node -e`, …); secret files (`.env`, `*.pem`, `*.key`, `id_*`) are denied in Bash and Read; `integrate check` fails on files outside every task's writable set that were modified after dispatch | `lib/masking.js`, `hooks/patterns.js`, `hooks/guard.js`, `lib/integrate.js` | `tests/hooks.test.js`, `tests/evidence.test.js`, `tests/workflow.test.js` |
 | Audit, SubagentStop and SessionStart hooks; silence outside adlc projects | `hooks/*.js` | `tests/hooks.test.js` |
 | End-to-end walkthrough of one feature through every stage, using real CLI and hook scripts | `examples/slugify/run.sh` | `tests/e2e.test.js` |
 
@@ -40,6 +41,8 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 **Bugs found and fixed during the smoke test**
 - The worker ran the CLI as `node "/…/bin/adlc" worker claim …`. The quote after `adlc` defeated the claim pattern, so the worker was never bound and the coordinator had to confirm the stop by hand. The claim, user-only and worker-subcommand patterns now accept a quoted CLI path.
 - The worker wrote files with shell heredocs (`cat > src/x.js <<EOF`), which neither the Write/Edit scope check nor the write log saw. Worker roles are now denied shell writes outside `.agent-lifecycle/tmp/`, and the worker contract says to use Write and Edit. In the re-run, every worker write went through the Write tool and was attributed in `runs/writes.jsonl`.
+
+**Attempted 2026-11-13 (review follow-up): live test of the remaining agents and skills.** The first scripted `claude -p` run failed before reaching the plugin: with the plugin copy outside the project, Claude Code denied reading `skills/coordinator/SKILL.md` and compound Bash commands, so no stage ran. The relaunch with broader tool permissions was blocked by the sandbox's auto-mode classifier, so these remain untested.
 
 **Still not live-tested**
 - `${user_config.*}` substitution in `/adlc:start` (the smoke test seeded state with the CLI).
@@ -99,6 +102,7 @@ Implemented, tested (`tests/worktree.test.js`, which uses real `git worktree`s) 
 | File writes made through the Bash tool cannot be attributed at write time | Detected afterwards by `integrate check`, using `git status` and the handoff's file list |
 | Token use and cost are not observable from hooks | Recorded as `"not observable"`; the controls are `maxTurns`, the task budget and repair limits |
 | `bin/` prevents installation on claude.ai and Cowork | Claude Code CLI and desktop only |
+| Bash guarding cannot stop scripts written with Write and run later, obfuscated commands (`eval`, variable indirection), or masking by pipes without `pipefail` | `integrate check` and the reviewer detect the effects afterwards |
 | Hook timeouts or crashes fail open at the platform level | Guard internal errors return `ask`; platform permission prompts still apply |
 
 ## Departures from the design spec

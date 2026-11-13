@@ -44,8 +44,15 @@ function decideWrite(input, ctx, binding) {
   return null;
 }
 
+function decideRead(input) {
+  const target = (input.tool_input || {}).file_path;
+  if (target && P.SECRET_FILE.test(String(target))) return deny(`${target} may hold secrets; ask the user to provide the values you need`);
+  return null;
+}
+
 function decideBash(input, ctx, binding, level) {
   const cmd = String((input.tool_input || {}).command || '');
+  if (P.READ_VERBS.test(cmd) && P.SECRET_IN_CMD.test(cmd)) return deny('this command reads a file that may hold secrets (.env, keys, certificates); ask the user to provide the values you need');
   if (P.PROTECTED_IN_CMD.test(cmd) && P.WRITE_OPS.test(cmd)) {
     return deny('state.json, approvals.jsonl and runs/ are managed by the adlc CLI and hooks; use adlc commands (read state with `adlc status`)');
   }
@@ -73,6 +80,7 @@ function decide(input, ctx, env = process.env) {
   const level = env.CLAUDE_PLUGIN_OPTION_GUARD_LEVEL === 'standard' ? 'standard' : 'strict';
   const binding = input.agent_id ? readBindings(ctx)[input.agent_id] || null : null;
   if (WRITE_TOOLS.includes(input.tool_name)) return decideWrite(input, ctx, binding);
+  if (input.tool_name === 'Read') return decideRead(input);
   if (input.tool_name === 'Bash') return decideBash(input, ctx, binding, level);
   return null;
 }

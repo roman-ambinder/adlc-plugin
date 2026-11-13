@@ -13,11 +13,20 @@ const USER_ONLY = new RegExp(`${ADLC}(approve|skip|unblock)\\b`);
 const ADLC_SUBCOMMAND = new RegExp(`${ADLC}([a-z-]+)`, 'g');
 const WORKER_CLAIM = new RegExp(`${ADLC}worker\\s+claim\\s+['"]?(T\\d+)['"]?\\s+--lease\\s+['"]?(L-[0-9a-f]+)`);
 
+// Secret-bearing files (the settings template denies the same set for the Read tool).
+const SECRET_FILE = /(^|\/)(\.env(\.(?!example\b|sample\b|template\b|dist\b)[\w.-]+)?|[^\/\s'"]+\.(pem|key)|id_(rsa|dsa|ecdsa|ed25519)[\w.-]*)$/;
+const SECRET_IN_CMD = /(^|[\s'"=<\/])(\.env(\.(?!example\b|sample\b|template\b|dist\b)[\w.-]+)?|[^\s'"\/]+\.(pem|key)|id_(rsa|dsa|ecdsa|ed25519)[\w.-]*)(?=$|[\s'";&|)])/;
+const READ_VERBS = /(^|[\s;&|(])(cat|less|more|head|tail|grep|egrep|rg|ag|sed|awk|cp|source|\.|xxd|od|strings|base64|bat|nl|tac|sort|diff|cut|tr|openssl)\s/;
+
+// Inline interpreter code (`python -c`, `node -e`, ...) can write any file without a visible target.
+const INLINE_CODE = /(^|[\s;&|(])(python[0-9.]*|node|nodejs|deno|bun|perl|ruby|php)\s+(-[A-Za-z]*\s+)*(-c|-e|-E|--eval|-p|--print)(\s|=|['"])/;
+
 // Files a shell command writes: redirect and tee targets, plus a marker for in-place or copying tools.
 function shellWriteTargets(cmd) {
   const out = [];
   for (const m of cmd.matchAll(/(?<![<0-9&>])>>?\s*(['"]?)([^\s'";&|()]+)\1/g)) if (!m[2].startsWith('&')) out.push(m[2]);
   for (const m of cmd.matchAll(/\btee\s+(?:-a\s+)?(['"]?)([^\s'";&|()]+)\1/g)) out.push(m[2]);
+  if (INLINE_CODE.test(cmd)) out.push('<inline interpreter code>');
   if (/\bsed\s+(-[a-zA-Z]*\s+)*-i/.test(cmd) || /(^|[\s;&|(])(cp|mv|install|dd|truncate|touch)\s/.test(cmd)) out.push('<cp/mv/sed -i/dd/truncate/touch>');
   return out;
 }
@@ -26,9 +35,14 @@ const SHELL_WRITE_OK = (target) => target === '/dev/null' || target === '/dev/st
 const TEST_FILE = /(^|\/)(tests?|__tests__|spec|specs)\/|[._-](test|spec)\.[a-z0-9]+$|_test\.(go|py)$|(^|\/)test_[^/]*\.py$/i;
 const TEST_DISABLE = /(\b(it|test|describe)\.(skip|only)\s*\(|\bx(it|describe|test)\s*\(|@pytest\.mark\.skip|@unittest\.skip|\bt\.Skip\(|#\[ignore\]|\{\s*skip:\s*true)/;
 
+const { masksExitStatus } = require('../lib/masking');
+
+const CHECK_WORDS = String.raw`\b(test|tests|pytest|jest|vitest|mocha|tsc|eslint|ruff|mypy|lint|check|build|verify|make|cargo|phpunit|rspec|gradle|mvn|--test)\b`;
 const CHECK_BYPASS = [
   /--no-verify\b/,
-  /\b(test|tests|pytest|jest|vitest|mocha|tsc|eslint|ruff|mypy|--test)\b[^;&|\n]*\|\|\s*(true\b|:|exit\s+0\b)/,
+  // masking after a known check command, or anywhere in a command handed to `adlc run` (which would record a false exit 0)
+  { test: (cmd) => new RegExp(CHECK_WORDS).test(cmd) && masksExitStatus(cmd) },
+  { test: (cmd) => /\badlc['"]?\s+run\b/.test(cmd) && masksExitStatus(cmd) },
 ];
 
 // `git` followed by global options such as -C <dir>, -c k=v or --git-dir=..., then the subcommand.
@@ -53,4 +67,4 @@ function riskyKind(cmd, level = 'strict') {
   return null;
 }
 
-module.exports = { PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
+module.exports = { SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };

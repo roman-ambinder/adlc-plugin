@@ -29,6 +29,8 @@ hooks: SessionStart (status) · PreToolUse (guard) · PostToolUse (audit) · Sub
 - **Hooks** enforce boundaries through Claude Code's supported controls:
   - deny edits to state and approval files;
   - deny edits that skip tests;
+  - deny commands that mask a check's exit status (`|| true`, `; exit 0`, `set +e`), and `adlc run` refuses to record them;
+  - deny reading `.env`, keys and certificates through Bash or the Read tool;
   - deny writes outside a role's or task's scope;
   - ask before commits, pushes, PRs, installs, network access, destructive commands, publishing and deploying.
 
@@ -106,7 +108,7 @@ After changing plugin files, run `/reload-plugins` or start a new session.
 **Recommended project permissions:** copy the entries from `plugins/adlc/settings-template.json` into your project's `.claude/settings.json`. A plugin cannot ship permission rules itself. The template:
 - allows the routine `adlc` subcommands without a prompt;
 - keeps commits, pushes, PRs, installs and publishing on `ask`;
-- denies reading `.env`, keys and similar files.
+- denies the Read tool on `.env`, keys and similar files (the guard hook also blocks them in Bash commands and Read calls).
 
 `approve`, `skip`, `unblock` and `lease` are deliberately left out of the allow list.
 
@@ -240,7 +242,7 @@ npm test
 npm run validate
 ```
 
-`npm test` runs 101 `node:test` tests: state, stages, tasks, gates, evidence, dispatch, integration, CLI, hooks, skill and agent files, and the end-to-end example. `npm run validate` runs `claude plugin validate --strict` on the plugin and the marketplace.
+`npm test` runs the `node:test` suites (state, stages, tasks, gates, evidence, dispatch, integration, CLI, hooks, skill and agent files, and the end-to-end example). CI (`.github/workflows/ci.yml`) runs them on Node 18, 20 and 22 and validates the manifests. `npm run validate` runs `claude plugin validate --strict` on the plugin and the marketplace.
 
 ## Troubleshooting
 
@@ -248,7 +250,7 @@ npm run validate
 |---|---|
 | `adlc: command not found` in Bash | The plugin must be enabled. Skills fall back to `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`; you can run `node plugins/adlc/bin/adlc` from a checkout |
 | `no active change` (exit 4) | Run `/adlc:start` first. The CLI finds `.agent-lifecycle/` by walking up from the current directory, or uses `ADLC_ROOT` |
-| `plan gate not approved` / `approval is stale` | Review the files, then run `/adlc:approve plan` again. Any edit to covered files, tasks or packets after approval needs a new approval |
+| `plan gate not approved` / `approval is stale` | Review the files, then run `/adlc:approve plan` again. Any edit to the covered files (requirements, plan, decisions) or to the tasks, contracts or execution plan after approval needs a new approval. Packets are rendered from the tasks, so they are covered through them; a hand edit to a packet is overwritten at the next dispatch |
 | `state changed concurrently` (exit 3) | Another adlc process wrote state. Re-run the command |
 | `no SubagentStop record for L-…` | The worker may still be running. Once it has returned, inspect its changes and run `adlc lease stopped <L> "<note>"` |
 | Task blocked after repeated failures | Read its evidence and handoff, decide the approach, then `/adlc:unblock "<note>" --task T<n>` |
