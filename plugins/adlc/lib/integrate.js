@@ -59,6 +59,29 @@ function gitChanged(root) {
   return r.stdout.split('\n').filter(Boolean).map((l) => l.slice(3).replace(/^"|"$/g, '').split(' -> ').pop()).filter((f) => !f.startsWith('.agent-lifecycle/'));
 }
 
+// Time windows in which an `adlc run` check was executing. A file modified inside one was written by the check
+// (coverage output, a lockfile rewrite), not by the worker, so it is neither a scope violation nor part of the task's change.
+function checkWindows(root) {
+  return evidence.list(root).map((e) => ({ end: Date.parse(e.ts) + 50, start: Date.parse(e.ts) - (e.duration_ms || 0) - 100 }));
+}
+
+function writtenByCheck(windows, dir, file) {
+  try {
+    const ms = fs.statSync(path.join(dir, file)).mtimeMs;
+    return windows.some((w) => ms >= w.start && ms <= w.end);
+  } catch {
+    return false;
+  }
+}
+
+// Dirty paths of a worktree split into the task's change and artifacts of its checks (outside its writable set only).
+function worktreeChanges(root, workspace, t) {
+  const dirty = wt.dirtyPaths(workspace) || [];
+  const windows = checkWindows(root);
+  const artifacts = dirty.filter((f) => !t.files.some((g) => entriesOverlap(g, f)) && writtenByCheck(windows, workspace, f));
+  return { changed: dirty.filter((f) => !artifacts.includes(f)), artifacts };
+}
+
 function crossChecks(s, id) {
   return [...new Set(s.tasks.filter((t) => t.status === 'integrated' || t.id === id).flatMap((t) => t.checks))];
 }
@@ -101,7 +124,7 @@ function integrateCheck(root, s, id) {
   if (outside.length) problems.push(`changed files outside ${id}'s writable set: ${outside.join(', ')}`);
   let worktree = null;
   if (s.execution.mode === 'worktree') {
-    worktree = worktreeDetails(root, t, h, problems);
+    worktree = worktreeDetails(root, t, h, problems, warnings);
     for (const f of worktree ? worktree.changed : []) changed.add(f);
     const outsideWt = worktree ? worktree.changed.filter((f) => !t.files.some((g) => entriesOverlap(g, f))) : [];
     if (outsideWt.length) problems.push(`worktree changes outside ${id}'s writable set: ${outsideWt.join(', ')}`);
@@ -112,10 +135,12 @@ function integrateCheck(root, s, id) {
     const stray = git.filter((f) => !owned.some((g) => entriesOverlap(g, f)));
     // A stray file modified after this task was dispatched was most likely written by a worker outside its scope
     // (for example through an interpreter, which the guard cannot see); older dirt is the user's own and only warns.
+    // Files written while an `adlc run` check was executing (coverage output, lockfile touches) come from the check, not the worker.
     const sinceMs = Date.parse(t.timing.dispatched_at || '') || 0;
+    const windows = checkWindows(root);
     const fresh = stray.filter((f) => {
       try {
-        return fs.statSync(path.join(root, f)).mtimeMs >= sinceMs;
+        return fs.statSync(path.join(root, f)).mtimeMs >= sinceMs && !writtenByCheck(windows, root, f);
       } catch {
         return false;
       }
@@ -134,7 +159,7 @@ function shellQuote(s) {
 }
 
 // Worktree mode: the handoff's workspace must be a linked worktree of this repository with only the task's changes.
-function worktreeDetails(root, t, h, problems) {
+function worktreeDetails(root, t, h, problems, warnings) {
   if (!h || typeof h.workspace !== 'string') return null;
   const linked = wt.linkedWorktree(h.workspace);
   if (!linked || linked.mainRoot !== fs.realpathSync(root)) {
@@ -144,7 +169,7 @@ function worktreeDetails(root, t, h, problems) {
   const workspace = linked.worktreeRoot;
   const branch = wt.branchOf(workspace);
   if (!branch) problems.push(`worktree ${workspace} is not on a branch`);
-  const changed = wt.dirtyPaths(workspace) || [];
+  const { changed, artifacts } = worktreeChanges(root, workspace, t);
   if (!changed.length) problems.push(`worktree ${workspace} has no uncommitted changes to integrate`);
   const files = changed.map(shellQuote).join(' ');
   const commands = branch && changed.length ? [
@@ -152,6 +177,7 @@ function worktreeDetails(root, t, h, problems) {
     `git -C ${shellQuote(workspace)} commit -m ${shellQuote(`adlc(${t.id}): ${t.title}`)}`,
     `git merge --no-ff ${shellQuote(branch)} -m ${shellQuote(`adlc: integrate ${t.id} (${t.title})`)}`,
   ] : [];
+  if (artifacts.length) warnings.push(`left out of the commit (written by check runs, not by the worker): ${artifacts.join(', ')}`);
   const base = wt.git(workspace, ['rev-parse', 'HEAD']).out || null;
   return { workspace, branch, base, changed, commands };
 }
@@ -173,7 +199,7 @@ function integrateDone(root, s, id) {
   if (s.execution.mode === 'worktree') {
     const lease = [...s.leases].reverse().find((l) => l.task === id && l.branch);
     if (!lease) problems.push(`no worktree branch recorded for ${id}; run \`adlc integrate check ${id}\``);
-    else if (wt.git(root, ['rev-parse', lease.branch]).out === lease.base || (wt.dirtyPaths(lease.workspace) || []).length) {
+    else if (wt.git(root, ['rev-parse', lease.branch]).out === lease.base || worktreeChanges(root, lease.workspace, t).changed.length) {
       problems.push(`the changes in ${lease.workspace} are not committed yet: run the commit and merge commands printed by \`adlc integrate check ${id}\``);
     } else if (!wt.isAncestor(root, lease.branch)) problems.push(`branch ${lease.branch} is not merged into the current branch yet: run the commit and merge commands printed by \`adlc integrate check ${id}\``);
     else {
