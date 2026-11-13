@@ -8,14 +8,14 @@ Focused subagents do the work: analyst, architect, developer, tester and reviewe
 
 It is built for solo developers and small teams. It is language-agnostic: it uses the repository's own test, lint, format and type-check commands.
 
-> **Version 0.1.0 (Slice 1).** Build runs **sequentially**. Parallel build is designed (spec §6.7) but not implemented yet: `parallel_mode: auto` resolves to `sequential` and records why. See [docs/capabilities.md](docs/capabilities.md).
+> **Version 0.2.0.** Build runs sequentially, or in parallel in the **shared checkout** when the plan has independent tasks with disjoint files. Worktree isolation (spec §6.7) is not implemented yet: `parallel_mode: worktree` falls back to shared and records why. See [docs/capabilities.md](docs/capabilities.md).
 
 ## Architecture
 
 ```
 you ──/adlc:* skills──▶ main session (coordinator rules)
                              │  Agent tool, one worker at a time
-            ┌────────┬───────┼────────┬─────────┐
+            ┌────────┬───────┼────────┬─────────┐       (shared mode: several developers at once, disjoint files)
          analyst architect developer tester  reviewer     plugin subagents with tool allowlists
                              │
                   adlc CLI (bin/adlc, Node ≥ 18, no dependencies)
@@ -148,8 +148,8 @@ Set these when enabling the plugin, or later with `/plugin` → Installed → Co
 | `guard_level` | `strict` | `standard` asks before commit, push, PR, install, network, destructive, publish and deploy commands. `strict` also asks before merge, rebase, worktree and other history edits |
 | `max_repair_attempts` | `3` | Failed attempts per task before it is blocked and work stops |
 | `max_tasks_per_run` | `5` | Tasks dispatched per session before the coordinator stops and writes a handoff |
-| `parallel_mode` | `auto` | `auto`, `worktree`, `shared` or `sequential`. In 0.1.0 all of them run sequentially |
-| `max_parallel` | `2` | Upper bound on concurrent workers (used once parallel modes exist) |
+| `parallel_mode` | `auto` | `auto` and `shared` run independent M/L tasks with disjoint files concurrently in the shared checkout; otherwise sequential. `worktree` currently falls back to shared. `sequential` always runs one worker at a time. The chosen mode and reasons are written to `plan.md` |
+| `max_parallel` | `2` | Upper bound on concurrent workers in shared mode |
 | `serial_globs` | lockfiles, manifests, config, migrations, generated files | Tasks that touch these always run alone |
 
 Values are captured into `state.json` when a change starts.
