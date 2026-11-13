@@ -1,0 +1,36 @@
+'use strict';
+
+// Files only the adlc CLI (state.json, approvals.jsonl) or hooks (runs/) may write.
+const PROTECTED_PATH = /^\.agent-lifecycle\/(state\.json|approvals\.jsonl|runs\/)/;
+const PROTECTED_IN_CMD = /\.agent-lifecycle\/(state\.json|approvals\.jsonl|runs\/)/;
+const WRITE_OPS = /(>|\btee\b|\bsed\s+-i|\brm\b|\bmv\b|\bcp\b|\btruncate\b|\bdd\b|\bpython3?\b|\bnode\b|\bperl\b|\bruby\b|\bchmod\b|\bln\b)/;
+
+const USER_ONLY = /\badlc\s+(approve|skip|unblock)\b/;
+
+const TEST_FILE = /(^|\/)(tests?|__tests__|spec|specs)\/|[._-](test|spec)\.[a-z0-9]+$|_test\.(go|py)$|(^|\/)test_[^/]*\.py$/i;
+const TEST_DISABLE = /(\b(it|test|describe)\.(skip|only)\s*\(|\bx(it|describe|test)\s*\(|@pytest\.mark\.skip|@unittest\.skip|\bt\.Skip\(|#\[ignore\]|\{\s*skip:\s*true)/;
+
+const CHECK_BYPASS = [
+  /--no-verify\b/,
+  /\b(test|tests|pytest|jest|vitest|mocha|tsc|eslint|ruff|mypy|--test)\b[^;&|\n]*\|\|\s*(true\b|:|exit\s+0\b)/,
+];
+
+// standard: the actions the safety rules always require approval for. strict adds other history-changing git commands.
+const RISKY = [
+  { kind: 'git commit/push/tag', standard: true, re: /\bgit\s+(commit|push|tag)\b/ },
+  { kind: 'destructive git command', standard: true, re: /\bgit\s+(reset\s+--hard|clean\b|checkout\s+--\s|restore\b|stash\s+(drop|clear)|branch\s+-D)/ },
+  { kind: 'git history or worktree change', standard: false, re: /\bgit\s+(merge|rebase|cherry-pick|am|revert|stash|worktree\s+(add|remove|prune)|branch\s+-d)\b/ },
+  { kind: 'GitHub CLI action (pull requests, releases, API)', standard: true, re: /\bgh\s+(pr|release|repo|api|workflow|issue)\b/ },
+  { kind: 'dependency installation', standard: true, re: /\b(npm|pnpm|yarn|bun)\s+(i|install|add|ci|update|upgrade)\b|\bnpx\s|\bpip3?\s+install\b|\buv\s+(add|sync|pip\s+install)\b|\bpoetry\s+(add|install)\b|\bcargo\s+(add|install)\b|\bgo\s+(get|install)\b|\bbrew\s+install\b|\bgem\s+install\b|\bapt(-get)?\s+install\b/ },
+  { kind: 'network or external service access', standard: true, re: /\b(curl|wget|ssh|scp|rsync|telnet|ftp)\b|\bnc\s/ },
+  { kind: 'destructive delete', standard: true, re: /\brm\s+-[a-zA-Z]*[rRf]/ },
+  { kind: 'publishing', standard: true, re: /\b(npm|pnpm|yarn)\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b|\bgem\s+push\b/ },
+  { kind: 'deployment', standard: true, re: /\bdocker\s+(push|login)\b|\bkubectl\s+(apply|delete|rollout|scale|patch)\b|\bterraform\s+(apply|destroy)\b|\bhelm\s+(install|upgrade|uninstall)\b|\b(npm|pnpm|yarn)\s+run\s+deploy\b|(^|[\s;&|/])deploy(\.sh)?(\s|$)/ },
+];
+
+function riskyKind(cmd, level = 'strict') {
+  for (const r of RISKY) if ((level === 'strict' || r.standard) && r.re.test(cmd)) return r.kind;
+  return null;
+}
+
+module.exports = { PROTECTED_PATH, PROTECTED_IN_CMD, WRITE_OPS, USER_ONLY, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
