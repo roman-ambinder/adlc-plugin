@@ -124,3 +124,55 @@ test('handoff notes are appended with secrets redacted, and archive needs done o
   assert.equal(cli(root, ['status']).status, 4);
   ok(cli(root, ['start', 'next change']));
 });
+
+test('start takes settings from the flag, then CLAUDE_PLUGIN_OPTION_*, ignoring unsubstituted placeholders', () => {
+  const { spawnSync } = require('node:child_process');
+  const bin = path.join(__dirname, '../plugins/adlc/bin/adlc');
+  const run = (args, env) => {
+    const root = tmpdir();
+    const r = spawnSync('node', [bin, 'start', 'x', ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, ADLC_ROOT: root, ...env } });
+    assert.equal(r.status, 0, r.stderr);
+    const st = JSON.parse(fs.readFileSync(path.join(root, '.agent-lifecycle/state.json'), 'utf8'));
+    return { ...st.config, max_repair_attempts: st.budget.max_repair_attempts, max_parallel: st.execution.max_parallel };
+  };
+  assert.deepEqual(run([], {}).approval_gates, ['plan', 'release']);
+  assert.deepEqual(run([], { CLAUDE_PLUGIN_OPTION_APPROVAL_GATES: 'plan' }).approval_gates, ['plan']);
+  assert.deepEqual(run(['--approval-gates', '${user_config.approval_gates}'], { CLAUDE_PLUGIN_OPTION_APPROVAL_GATES: 'release' }).approval_gates, ['release']);
+  assert.deepEqual(run(['--approval-gates', 'plan'], { CLAUDE_PLUGIN_OPTION_APPROVAL_GATES: 'release' }).approval_gates, ['plan']);
+  assert.equal(run(['--max-repair-attempts', '${user_config.max_repair_attempts}'], {}).max_repair_attempts, 3);
+  assert.equal(run([], { CLAUDE_PLUGIN_OPTION_MAX_PARALLEL: '4' }).max_parallel, 4);
+});
+
+test('approve, skip and unblock need a user prompt: a command the model runs alone is refused', () => {
+  const { userPrompt } = require('./helpers');
+  const root = tmpdir();
+  ok(cli(root, ['start', 'x', '--small']));
+  const asModel = (args) => cli(root, args, { asModel: true });
+  for (const args of [['approve', 'plan'], ['skip', 'specify', 'because'], ['unblock', 'note']]) {
+    const r = asModel(args);
+    assert.equal(r.status, 2, args.join(' '));
+    assert.match(r.stderr, /the user has not asked for this/);
+  }
+  // the user's prompt authorises exactly one matching command
+  userPrompt(root, '/adlc:skip specify not needed');
+  assert.equal(asModel(['approve', 'plan']).status, 2, 'a skip prompt does not authorise an approval');
+  assert.equal(asModel(['skip', 'specify', 'not needed']).status, 0);
+  assert.equal(asModel(['skip', 'specify', 'again']).status, 2, 'an intent is single use');
+  // other prompts leave no intent
+  userPrompt(root, 'please approve the plan');
+  userPrompt(root, '/adlc:status');
+  assert.equal(asModel(['approve', 'plan']).status, 2);
+});
+
+test('an intent expires after fifteen minutes and is ignored outside adlc projects', () => {
+  const ui = lib('userintent');
+  const root = tmpdir();
+  ok(cli(root, ['start', 'x', '--small']));
+  const rec = ui.record(root, { action: 'approve', arg: 'plan' });
+  assert.ok(ui.pending(root, 'approve', 'plan'));
+  assert.equal(ui.pending(root, 'approve', 'plan', Date.parse(rec.ts) + ui.TTL_MS + 1000), null);
+  const bare = tmpdir();
+  const { userPrompt } = require('./helpers');
+  assert.equal(userPrompt(bare, '/adlc:approve plan').status, 0);
+  assert.equal(fs.existsSync(path.join(bare, '.agent-lifecycle')), false);
+});

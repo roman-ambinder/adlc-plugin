@@ -50,9 +50,9 @@ test('guard denies direct writes to managed files but allows reading them', () =
   assert.equal(decision(hook('guard', write(root, '.agent-lifecycle/requirements.md'), root)), null);
 });
 
-test('guard asks before risky commands and user-only adlc commands', () => {
+test('guard asks before risky commands', () => {
   const root = project();
-  for (const cmd of ['git push origin main', 'git commit -m x', 'npm install left-pad', 'curl https://example.com', 'rm -rf build', 'npm publish', 'gh pr create', 'adlc approve plan', 'node /x/bin/adlc skip discover tiny', 'git merge feature']) {
+  for (const cmd of ['git push origin main', 'git commit -m x', 'npm install left-pad', 'curl https://example.com', 'rm -rf build', 'npm publish', 'gh pr create', 'git merge feature']) {
     assert.equal(decision(hook('guard', bash(cmd), root)), 'ask', cmd);
   }
   for (const cmd of ['ls -la', 'npm test', 'git status', 'git diff', 'adlc status', 'adlc run --stage verify -- "npm test"']) {
@@ -172,7 +172,7 @@ test('a claim made through a quoted CLI path binds the worker', () => {
   const bindings = JSON.parse(fs.readFileSync(path.join(root, '.agent-lifecycle/runs/bindings.json'), 'utf8'));
   assert.equal(bindings['agent-q'].lease, 'L-abc123');
   assert.equal(decision(hook('guard', bash('node "/x/bin/adlc" integrate done T1', who), root)), 'deny');
-  assert.equal(decision(hook('guard', bash('node "/x/bin/adlc" approve plan'), root)), 'ask');
+  assert.equal(decision(hook('guard', bash('node "/x/bin/adlc" approve plan'), root)), 'deny', 'no user prompt, no approval');
 });
 
 test('workers cannot write files through the shell, except into .agent-lifecycle/tmp/', () => {
@@ -194,4 +194,77 @@ test('git global options do not hide risky subcommands', () => {
     assert.equal(decision(hook('guard', bash(cmd), root)), 'ask', cmd);
   }
   assert.equal(decision(hook('guard', bash('git -C /w status --short'), root)), null);
+});
+
+test('guard denies commands that mask a check\'s exit status, including inside adlc run', () => {
+  const root = project();
+  for (const cmd of ['npm run lint || true', 'npm run check || true', 'npm test ; true', 'npm test; exit 0', 'pytest || echo ignored', 'set +e; npm test',
+    'adlc run --stage verify -- "make all || true"', 'adlc run --stage verify -- "./check.sh; exit 0"']) {
+    assert.equal(decision(hook('guard', bash(cmd), root)), 'deny', cmd);
+  }
+  for (const cmd of ['npm test', 'npm test || exit 1', 'rm -f x || true', 'adlc run --stage verify -- "npm test"']) {
+    assert.notEqual(decision(hook('guard', bash(cmd), root)), 'deny', cmd);
+  }
+});
+
+test('workers cannot write files through inline interpreter code', () => {
+  const root = project({ lease: true });
+  const who = { agent_id: 'agent-i', agent_type: 'adlc:developer', cwd: root };
+  for (const cmd of ["python3 -c \"open('src/a.js','w').write('x')\"", "node -e \"require('fs').writeFileSync('src/a.js','x')\"", "perl -e 'open F,\">src/a.js\"'"]) {
+    assert.equal(decision(hook('guard', bash(cmd, who), root)), 'deny', cmd);
+  }
+  for (const cmd of ['node --test test/a.test.js', 'node -r ts-node/register test/a.test.js', 'python3 -m pytest']) {
+    assert.equal(decision(hook('guard', bash(cmd, who), root)), null, cmd);
+  }
+  assert.equal(decision(hook('guard', bash("node -e \"console.log(1)\""), root)), null, 'the main session is not restricted this way');
+});
+
+test('guard denies reading secret files through Bash and the Read tool', () => {
+  const root = project();
+  for (const cmd of ['cat .env', 'grep KEY .env.local', 'head -n1 ./config/server.pem', 'cp ~/.ssh/id_rsa /tmp/x', 'source .env']) {
+    assert.equal(decision(hook('guard', bash(cmd), root)), 'deny', cmd);
+  }
+  for (const cmd of ['cat .env.example', 'git add .env', 'ls', 'cat src/environment.js']) {
+    assert.equal(decision(hook('guard', bash(cmd), root)), null, cmd);
+  }
+  const read = (f) => ({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: root, tool_input: { file_path: f } });
+  assert.equal(decision(hook('guard', read(path.join(root, '.env')), root)), 'deny');
+  assert.equal(decision(hook('guard', read(path.join(root, 'certs/site.key')), root)), 'deny');
+  assert.equal(decision(hook('guard', read(path.join(root, 'src/a.js')), root)), null);
+});
+
+test('guard asks before test cases are deleted and denies more skip forms', () => {
+  const root = project();
+  const edit = (o, n) => ({ hook_event_name: 'PreToolUse', tool_name: 'Edit', cwd: root, tool_input: { file_path: path.join(root, 'test/a.test.js'), old_string: o, new_string: n } });
+  assert.equal(decision(hook('guard', edit("it('a', f);\nit('b', g);", "it('a', f);"), root)), 'ask');
+  assert.equal(decision(hook('guard', edit("it('a', f);", "it('a', f);\nit('b', g);"), root)), null);
+  assert.equal(decision(hook('guard', edit("it('a', f)", "it.todo('a')"), root)), 'deny');
+  assert.equal(decision(hook('guard', edit('x', '@Disabled\nvoid x()'), root)), 'deny');
+  fs.mkdirSync(path.join(root, 'test'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'test/a.test.js'), "it('a', f);\nit('b', g);\n");
+  const write = (c) => ({ hook_event_name: 'PreToolUse', tool_name: 'Write', cwd: root, tool_input: { file_path: path.join(root, 'test/a.test.js'), content: c } });
+  assert.equal(decision(hook('guard', write("it('a', f);\n"), root)), 'ask');
+  assert.equal(decision(hook('guard', write("it('a', f);\nit('b', g);\nit('c', h);\n"), root)), null);
+});
+
+test('guard asks before package runners, container runs and find -delete', () => {
+  const root = project();
+  for (const cmd of ['npm exec foo', 'pnpm dlx foo', 'yarn dlx foo', 'bunx foo', 'uvx foo', 'docker run --rm x', 'find . -name "*.tmp" -delete', 'find . -exec rm {} +']) {
+    assert.equal(decision(hook('guard', bash(cmd), root)), 'ask', cmd);
+  }
+  assert.equal(decision(hook('guard', bash('find . -name "*.js"'), root)), null);
+  assert.equal(decision(hook('guard', bash('docker run x', {}), root, { CLAUDE_PLUGIN_OPTION_GUARD_LEVEL: 'standard' })), null);
+});
+
+test('user-only adlc commands pass the guard only after the user typed the matching slash command', () => {
+  const { userPrompt } = require('./helpers');
+  const root = project();
+  assert.equal(decision(hook('guard', bash('adlc approve plan --note x'), root)), 'deny');
+  userPrompt(root, '/adlc:approve release');
+  assert.equal(decision(hook('guard', bash('adlc approve plan'), root)), 'deny', 'a release prompt does not cover plan');
+  assert.equal(decision(hook('guard', bash('adlc approve release --note x'), root)), null);
+  userPrompt(root, '/adlc:skip design too small');
+  assert.equal(decision(hook('guard', bash('adlc skip design "too small"'), root)), null);
+  userPrompt(root, '/adlc:unblock decided');
+  assert.equal(decision(hook('guard', bash('node "/x/bin/adlc" unblock "decided" --task T1'), root)), null);
 });

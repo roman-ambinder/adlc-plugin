@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 // PreToolUse guard. Emits only "deny" or "ask"; silence leaves the normal permission flow in charge.
+const fs = require('node:fs');
+const path = require('node:path');
 const { WRITE_TOOLS, readStdin, lifecycle, preToolDecision, roleOf, locate, workspaceOf, readBindings, updateBindings } = require('./common');
 const P = require('./patterns');
+const userIntent = require('../lib/userintent');
 const { entriesOverlap } = require('../lib/glob');
 
 const WORKER_ROLES = ['developer', 'developer-worktree', 'tester'];
@@ -21,6 +24,22 @@ function decideWrite(input, ctx, binding) {
   const removed = [ti.old_string, ...edits.map((e) => e && e.old_string)].filter(Boolean).join('\n');
   if (P.TEST_FILE.test(rel) && P.TEST_DISABLE.test(added) && !P.TEST_DISABLE.test(removed)) {
     return deny(`this edit skips or narrows tests in ${rel} (skip/only). Fix the behaviour instead; if a test truly must be skipped, ask the user to make that change`);
+  }
+  if (P.TEST_FILE.test(rel)) {
+    // Deleting test cases is as good as skipping them: ask, so the user sees it. For Write, compare with the file on disk.
+    let before = removed;
+    let after = added;
+    if (ti.content !== undefined) {
+      try {
+        before = fs.readFileSync(path.resolve(input.cwd || ctx.root, String(target)), 'utf8');
+      } catch {
+        before = '';
+      }
+      after = ti.content;
+    }
+    if (P.countTests(before) > P.countTests(after)) {
+      return ask(`this edit removes test cases from ${rel} (${P.countTests(before)} before, ${P.countTests(after)} after); approve only if the tests are obsolete`);
+    }
   }
   const role = roleOf(input.agent_type);
   if (role === 'reviewer') return deny('the reviewer role is read-only');
@@ -44,8 +63,15 @@ function decideWrite(input, ctx, binding) {
   return null;
 }
 
+function decideRead(input) {
+  const target = (input.tool_input || {}).file_path;
+  if (target && P.SECRET_FILE.test(String(target))) return deny(`${target} may hold secrets; ask the user to provide the values you need`);
+  return null;
+}
+
 function decideBash(input, ctx, binding, level) {
   const cmd = String((input.tool_input || {}).command || '');
+  if (P.READ_VERBS.test(cmd) && P.SECRET_IN_CMD.test(cmd)) return deny('this command reads a file that may hold secrets (.env, keys, certificates); ask the user to provide the values you need');
   if (P.PROTECTED_IN_CMD.test(cmd) && P.WRITE_OPS.test(cmd)) {
     return deny('state.json, approvals.jsonl and runs/ are managed by the adlc CLI and hooks; use adlc commands (read state with `adlc status`)');
   }
@@ -63,7 +89,12 @@ function decideBash(input, ctx, binding, level) {
       if (!WORKER_ADLC.includes(m[1])) return deny(`workers may only run adlc ${WORKER_ADLC.join('|')} (attempted adlc ${m[1]})`);
     }
   }
-  if (P.USER_ONLY.test(cmd)) return ask(`user-only adlc action: \`${cmd}\`. Approve only if you asked for this yourself.`);
+  if (P.USER_ONLY.test(cmd)) {
+    // The user's own /adlc:<action> prompt (recorded by the UserPromptSubmit hook) is the approval: no second prompt.
+    const m = cmd.match(P.USER_ONLY_ARG);
+    if (m && userIntent.pending(ctx.root, m[1], m[1] === 'unblock' ? null : m[2])) return null;
+    return deny(`only the user can run \`adlc ${m ? m[1] : 'approve|skip|unblock'}\`: ask them to type /adlc:${m ? m[1] : 'approve'}${m && m[2] ? ` ${m[2]}` : ''} themselves, then run it once. Do not try to get around this`);
+  }
   const kind = P.riskyKind(cmd, level);
   if (kind) return ask(`${kind} requires your approval: \`${cmd}\``);
   return null;
@@ -73,6 +104,7 @@ function decide(input, ctx, env = process.env) {
   const level = env.CLAUDE_PLUGIN_OPTION_GUARD_LEVEL === 'standard' ? 'standard' : 'strict';
   const binding = input.agent_id ? readBindings(ctx)[input.agent_id] || null : null;
   if (WRITE_TOOLS.includes(input.tool_name)) return decideWrite(input, ctx, binding);
+  if (input.tool_name === 'Read') return decideRead(input);
   if (input.tool_name === 'Bash') return decideBash(input, ctx, binding, level);
   return null;
 }

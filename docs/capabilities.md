@@ -1,6 +1,6 @@
 # adlc capabilities — implemented, tested, unsupported
 
-Status as of version 0.3.0 (Slices 1–3), 2026-11-13. "Tested" means covered by `npm test` (101 tests, all passing at the time of writing) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
+Status as of version 0.3.0 (Slices 1–3), 2026-11-13. "Tested" means covered by `npm test` (all passing at the time of writing; the count is not recorded here so it cannot drift) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
 
 ## Implemented and tested
 
@@ -19,6 +19,7 @@ Status as of version 0.3.0 (Slices 1–3), 2026-11-13. "Tested" means covered by
 | Readiness gate before dispatch, leases, no duplicate dispatch, per-session task budget | `lib/dispatch.js` | `tests/workflow.test.js` |
 | Structured handoff validation; integration check (evidence matching, ownership, stop record); cross-task checks required before integration | `lib/integrate.js` | `tests/workflow.test.js`, `tests/cli.test.js` |
 | Guard hook (Bash guarding is pattern-based and best-effort; scripts and indirection can bypass it): protected state files, test-disabling edits, check bypasses, risky-command `ask`, user-only command `ask`, role write scopes, workers must claim before writing, worker scope, never `allow` | `hooks/guard.js` | `tests/hooks.test.js` |
+| Guard additions (2026-11-13 review): commands that mask an exit status (`\|\| true`, `; true`, `; exit 0`, `set +e`) are denied and `adlc run` refuses to record them; workers are denied inline interpreter code (`python -c`, `node -e`, …); edits that delete test cases ask first, and `.todo`/`@Disabled`/`xfail`-style skips are denied; package runners (`npm exec`, `pnpm dlx`, `yarn dlx`, `bunx`, `uvx`) and `find -delete` ask, `docker run` asks in strict; secret files (`.env`, `*.pem`, `*.key`, `id_*`) are denied in Bash and Read; `integrate check` fails on files outside every task's writable set that were modified after dispatch | `lib/masking.js`, `hooks/patterns.js`, `hooks/guard.js`, `lib/integrate.js` | `tests/hooks.test.js`, `tests/evidence.test.js`, `tests/workflow.test.js` |
 | Audit, SubagentStop and SessionStart hooks; silence outside adlc projects | `hooks/*.js` | `tests/hooks.test.js` |
 | End-to-end walkthrough of one feature through every stage, using real CLI and hook scripts | `examples/slugify/run.sh` | `tests/e2e.test.js` |
 
@@ -41,9 +42,24 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 - The worker ran the CLI as `node "/…/bin/adlc" worker claim …`. The quote after `adlc` defeated the claim pattern, so the worker was never bound and the coordinator had to confirm the stop by hand. The claim, user-only and worker-subcommand patterns now accept a quoted CLI path.
 - The worker wrote files with shell heredocs (`cat > src/x.js <<EOF`), which neither the Write/Edit scope check nor the write log saw. Worker roles are now denied shell writes outside `.agent-lifecycle/tmp/`, and the worker contract says to use Write and Edit. In the re-run, every worker write went through the Write tool and was attributed in `runs/writes.jsonl`.
 
+**Live test of the remaining agents and skills (2026-11-13, Claude Code 2.1.325, `claude -p --plugin-dir --add-dir`, scoped `--allowedTools`, scratch repository with a `node --test` script).** The first attempt failed on test-harness permissions (plugin directory outside the project not readable, compound Bash commands not allowed); passing `--add-dir <plugin>` and a scoped allowlist fixed that.
+
+| Exercised live | Observed |
+|---|---|
+| `/adlc:start` (with `--small`, and without) | Change created; the analyst ran discover and its blocking questions were passed to the user |
+| `/adlc:plan` | Analyst wrote requirements with ACs; coordinator created tasks; architect wrote `D-1`/`C-1` in `decisions.md` |
+| `/adlc:approve plan` | Run by the test script as the user; build then started. Re-verified with the intent check: prose request refused, slash command accepted (see the platform table) |
+| `/adlc:next` (build, verify, review) | Developer built the task and `integrate check` passed; tester ran `npm test` through `adlc run`; reviewer returned 0 blocking and 4 optional findings |
+| `/adlc:release` and `/adlc:approve release` | Release notes written, approval recorded, stage completed |
+| `/adlc:resume` | Recorded the user's answers and completed discover |
+
+**Findings and fixes from this run**
+- `${user_config.*}` was passed to the model unsubstituted when no plugin settings were saved, and the model dropped the flags. `adlc start` now resolves each setting as flag, then `CLAUDE_PLUGIN_OPTION_<NAME>`, then the default, and ignores an unsubstituted placeholder.
+- Build packets listed `AC-1 … AC-n` with no text, and the worker noted it had to guess from the goal. Packets now include each criterion's text from `requirements.md`.
+
+**Not covered by this run:** interactive sessions, parallel modes with the newly exercised agents, and a run with the user's real settings (the settings template was not applied, because the scratch repository was untrusted).
+
 **Still not live-tested**
-- `${user_config.*}` substitution in `/adlc:start` (the smoke test seeded state with the CLI).
-- The analyst, architect, reviewer and tester agents, and the plan, verify, review and release skills.
 - An interactive session, as opposed to `-p`.
 - SubagentStop's `last_assistant_message` was empty in `-p` (the subagent reported through its handback), so stop records have an empty excerpt.
 
@@ -94,11 +110,13 @@ Implemented, tested (`tests/worktree.test.js`, which uses real `git worktree`s) 
 |---|---|
 | A plugin cannot ship permission rules | `settings-template.json` to copy into `.claude/settings.json`; guard hook `deny`/`ask` |
 | `permissionMode`, `hooks`, `mcpServers` and `initialPrompt` are ignored in plugin agents | Plugin-level hooks plus per-agent `tools` allowlists |
-| Hooks cannot tell whether a Bash command came from the user's request or the model | User-only skills use `disable-model-invocation: true`, and the guard asks before `adlc approve`, `skip` and `unblock` so the exact command is always shown |
+| Hooks cannot tell whether a Bash command came from the user's request or the model | User-only skills use `disable-model-invocation: true`. The `UserPromptSubmit` hook, which sees only prompts the user submits, records an intent when the user types `/adlc:approve`, `/adlc:skip` or `/adlc:unblock`; the CLI and guard require a matching, unexpired, unused intent (or a terminal). Live-verified 2026-11-13: a prose request to run `adlc approve plan` was blocked, and the slash command approved once. A command written by a shell script to `runs/` is still the best-effort Bash limit |
 | A plugin cannot set `worktree.baseRef` | Worktree mode (when implemented) requires the user to set it; `auto` will not select worktree mode without it |
 | File writes made through the Bash tool cannot be attributed at write time | Detected afterwards by `integrate check`, using `git status` and the handoff's file list |
 | Token use and cost are not observable from hooks | Recorded as `"not observable"`; the controls are `maxTurns`, the task budget and repair limits |
 | `bin/` prevents installation on claude.ai and Cowork | Claude Code CLI and desktop only |
+| Weakened assertions in tests are not detected by hooks | The reviewer agent |
+| Bash guarding cannot stop scripts written with Write and run later, obfuscated commands (`eval`, variable indirection), or masking by pipes without `pipefail` | `integrate check` and the reviewer detect the effects afterwards |
 | Hook timeouts or crashes fail open at the platform level | Guard internal errors return `ask`; platform permission prompts still apply |
 
 ## Departures from the design spec

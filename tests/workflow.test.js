@@ -299,3 +299,18 @@ test('validateHandoff and submitHandoff reject malformed handoffs', () => {
   const { root, s } = planned([TASK()]);
   assert.throws(() => integrate.submitHandoff(root, s, 'T1', { task: 'T1' }), /handoff rejected/);
 });
+
+test('integrate check flags files outside every task written after dispatch, but only warns about older dirt', () => {
+  const { root, s } = planned([TASK()]);
+  const git = (...a) => require('node:child_process').spawnSync('git', a, { cwd: root, encoding: 'utf8' });
+  git('init', '-q');
+  writeFile(root, 'old-note.txt', 'user dirt');
+  const past = new Date(Date.now() - 60000);
+  fs.utimesSync(path.join(root, 'old-note.txt'), past, past);
+  workerRun(root, s, { extraWrite: null });
+  s.tasks[0].timing.dispatched_at = new Date(Date.now() - 30000).toISOString();
+  writeFile(root, 'sneaky.js', 'written outside the task, e.g. by an interpreter');
+  const r = integrate.integrateCheck(root, s, 'T1');
+  assert.ok(r.problems.some((x) => /sneaky\.js/.test(x) && !/old-note/.test(x)), r.problems.join('\n'));
+  assert.ok(r.warnings.some((x) => /old-note\.txt/.test(x)));
+});

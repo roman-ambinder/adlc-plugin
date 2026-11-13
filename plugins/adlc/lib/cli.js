@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const st = require('./state');
+const userIntent = require('./userintent');
 const stages = require('./stages');
 const tasks = require('./tasks');
 const packets = require('./packets');
@@ -131,18 +132,26 @@ const handlers = {
   },
 
   start({ root, pos, flags }) {
+    // flag > CLAUDE_PLUGIN_OPTION_<NAME> > default. A flag still holding an unsubstituted ${user_config.*} placeholder
+    // (plugin settings not applied by the host) or an empty value is treated as not given.
+    const opt = (flag) => {
+      const v = flags[flag];
+      if (typeof v === 'string' && v !== '' && !v.includes('${user_config')) return v;
+      const e = process.env[`CLAUDE_PLUGIN_OPTION_${flag.replace(/-/g, '_').toUpperCase()}`];
+      return e === undefined || e === '' ? undefined : e;
+    };
     const title = need(pos.slice(1).join(' '), 'usage: adlc start "<title>" [--type feature|bugfix] [--small]');
     const s = st.newState({
       title,
       type: flags.type || 'feature',
       small: Boolean(flags.small),
       config: {
-        approval_gates: flags['approval-gates'],
-        parallel_mode: flags['parallel-mode'],
-        max_parallel: flags['max-parallel'],
-        max_repair_attempts: flags['max-repair-attempts'],
-        max_tasks_per_run: flags['max-tasks-per-run'],
-        serial_globs: flags['serial-globs'],
+        approval_gates: opt('approval-gates'),
+        parallel_mode: opt('parallel-mode'),
+        max_parallel: opt('max-parallel'),
+        max_repair_attempts: opt('max-repair-attempts'),
+        max_tasks_per_run: opt('max-tasks-per-run'),
+        serial_globs: opt('serial-globs'),
       },
     });
     s.stage = stages.current(s);
@@ -199,6 +208,7 @@ const handlers = {
   skip({ root, pos }) {
     const stage = need(pos[1], 'usage: adlc skip <stage> <reason>');
     const reason = need(pos.slice(2).join(' '), 'a skip reason is required: adlc skip <stage> <reason>');
+    userIntent.require(root, 'skip', stage);
     const change = st.mutate(root, (s) => {
       stages.skipStage(s, stage, reason);
       return s.change.id;
@@ -209,6 +219,7 @@ const handlers = {
 
   unblock({ root, pos, flags }) {
     const note = need(pos.slice(1).join(' '), 'usage: adlc unblock <note> [--task T]');
+    userIntent.require(root, 'unblock');
     const change = st.mutate(root, (s) => {
       s.blocker = null;
       if (flags.task) tasks.unblockTask(s, flags.task);
@@ -313,6 +324,7 @@ const handlers = {
 
   approve({ root, pos, flags }) {
     const gate = need(pos[1], 'usage: adlc approve <plan|release> [--note text]');
+    userIntent.require(root, 'approve', gate);
     const rec = gates.approve(root, st.load(root), gate, typeof flags.note === 'string' ? flags.note : '');
     return { obj: rec, text: `approved ${gate} (hash ${rec.hash.slice(0, 12)})` };
   },

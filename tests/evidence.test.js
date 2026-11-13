@@ -72,3 +72,13 @@ test('latestByCmd keeps the newest run per command', () => {
   assert.equal(m.get('a').exit, 0);
   assert.equal(m.size, 2);
 });
+
+test('run refuses commands that mask their own exit status', () => {
+  const root = tmpdir();
+  st.init(root);
+  for (const cmd of ['exit 1 || true', 'exit 1; true', 'exit 1; exit 0', 'set +e; exit 1', 'exit 1 || echo fine']) {
+    assert.throws(() => evidence.run(root, { stage: 'verify', cmd: [cmd], cwd: root }), /masks its own exit status/, cmd);
+  }
+  assert.equal(evidence.list(root).length, 0, 'nothing is recorded for a refused command');
+  assert.equal(evidence.run(root, { stage: 'verify', cmd: ['false || exit 2'], cwd: root }).exit, 2);
+});

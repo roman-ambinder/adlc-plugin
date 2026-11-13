@@ -104,3 +104,15 @@ test('packetProblems and renderPacket', () => {
   assert.equal(files.length, 1);
   assert.match(fs.readFileSync(files[0], 'utf8'), /# Build packet T2: B/);
 });
+
+test('packets carry the text of each acceptance criterion', () => {
+  const { s } = (() => {
+    const s = st.newState({ title: 't' });
+    return { s };
+  })();
+  const t = { id: 'T1', title: 'x', goal: 'g', deps: [], contracts: { provides: [], consumes: [] }, files: ['a.js'], reads: [], resources: [], size: 'S', coupled: false, checks: ['npm test'], ac: ['AC-1', 'AC-2'], max_attempts: 3, status: 'todo' };
+  s.tasks = [t];
+  const md = packets.renderPacket(s, t, { 'AC-1': 'returns the slug' });
+  assert.match(md, /- AC-1: returns the slug/);
+  assert.match(md, /^- AC-2$/m, 'an id with no text in requirements.md is still listed');
+});

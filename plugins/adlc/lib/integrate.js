@@ -110,7 +110,19 @@ function integrateCheck(root, s, id) {
   if (git) {
     const owned = s.tasks.filter((x) => !['todo', 'blocked'].includes(x.status)).flatMap((x) => x.files);
     const stray = git.filter((f) => !owned.some((g) => entriesOverlap(g, f)));
-    if (stray.length) warnings.push(`uncommitted changes not owned by any dispatched or integrated task: ${stray.join(', ')}`);
+    // A stray file modified after this task was dispatched was most likely written by a worker outside its scope
+    // (for example through an interpreter, which the guard cannot see); older dirt is the user's own and only warns.
+    const sinceMs = Date.parse(t.timing.dispatched_at || '') || 0;
+    const fresh = stray.filter((f) => {
+      try {
+        return fs.statSync(path.join(root, f)).mtimeMs >= sinceMs;
+      } catch {
+        return false;
+      }
+    });
+    if (fresh.length) problems.push(`files outside every dispatched or integrated task's writable set were modified since ${id} was dispatched: ${fresh.join(', ')}`);
+    const old = stray.filter((f) => !fresh.includes(f));
+    if (old.length) warnings.push(`uncommitted changes not owned by any dispatched or integrated task: ${old.join(', ')}`);
   }
   const result = { ok: problems.length === 0, problems, warnings, changed: [...changed], cross_checks: crossChecks(s, id) };
   if (worktree) Object.assign(result, { workspace: worktree.workspace, branch: worktree.branch, base: worktree.base, commands: worktree.commands });

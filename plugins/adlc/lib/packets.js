@@ -1,4 +1,5 @@
 'use strict';
+const fs = require('node:fs');
 const path = require('node:path');
 const { paths } = require('./state');
 const { atomicWrite } = require('./fsutil');
@@ -24,7 +25,16 @@ const WORKSPACE = {
   worktree: 'Work in your isolated git worktree (your current directory). Do not commit; the coordinator integrates.',
 };
 
-function renderPacket(s, t) {
+// Text of each `- AC-n: ...` line in requirements.md, so the worker sees what it must satisfy, not just the ids.
+function acTexts(root) {
+  const f = path.join(paths(root).dir, 'requirements.md');
+  const out = {};
+  if (!fs.existsSync(f)) return out;
+  for (const m of fs.readFileSync(f, 'utf8').matchAll(/^\s*[-*]\s*(AC-\d+)\s*:\s*(.+)$/gm)) out[m[1]] = m[2].trim();
+  return out;
+}
+
+function renderPacket(s, t, texts = {}) {
   const contract = (id) => {
     const c = s.contracts.find((x) => x.id === id);
     if (!c) return `${id} (missing)`;
@@ -44,7 +54,7 @@ function renderPacket(s, t) {
     t.goal,
     '',
     '## Acceptance criteria covered',
-    bullet(t.ac),
+    bullet(t.ac.map((id) => (texts[id] ? `${id}: ${texts[id]}` : id))),
     '',
     '## Prerequisites',
     bullet([...t.deps.map((d) => `task ${d} (integrated)`), ...t.contracts.consumes.map((c) => `contract ${c}`)]),
@@ -95,10 +105,11 @@ function packetPath(root, id) {
 
 function writePackets(root, s, ids) {
   const out = [];
+  const texts = acTexts(root);
   for (const t of s.tasks) {
     if (ids && !ids.includes(t.id)) continue;
     const f = packetPath(root, t.id);
-    atomicWrite(f, renderPacket(s, t), paths(root).tmp);
+    atomicWrite(f, renderPacket(s, t, texts), paths(root).tmp);
     out.push(f);
   }
   return out;

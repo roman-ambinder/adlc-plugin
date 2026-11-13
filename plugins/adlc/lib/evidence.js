@@ -6,7 +6,8 @@ const { spawnSync } = require('node:child_process');
 const { paths, now } = require('./state');
 const { atomicWrite, withLock } = require('./fsutil');
 const { redact } = require('./redact');
-const { usage } = require('./errors');
+const { usage, rule } = require('./errors');
+const { masksExitStatus } = require('./masking');
 
 const MAX_LINES = 200;
 const HEADER = /^<!-- adlc-evidence (\{.*\}) -->/;
@@ -38,6 +39,9 @@ function execute(cmd, cwd, timeout) {
 function run(root, { stage, task = null, cmd, cwd = process.cwd(), exclusive = false, timeoutMs } = {}) {
   if (!stage || stage === true) throw usage('--stage is required');
   if (!cmd || !cmd.length) throw usage('give the command after --, e.g. adlc run --stage verify -- "npm test"');
+  if (masksExitStatus(cmd.join(' '))) {
+    throw rule('refusing to record evidence for a command that masks its own exit status (`|| true`, `; true`, `; exit 0`, `set +e`): run the check on its own so a failure is recorded as a failure');
+  }
   const timeout = timeoutMs || Number(process.env.ADLC_RUN_TIMEOUT_MS) || 15 * 60 * 1000;
   const p = paths(root);
   const go = () => execute(cmd, cwd, timeout);
