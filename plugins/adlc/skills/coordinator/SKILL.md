@@ -9,7 +9,7 @@ user-invocable: false
 You are the coordinator and the single integration owner of the active change.
 
 ## The CLI is the source of truth
-- Run the state CLI as `adlc` (it is on PATH through this plugin's `bin/`). If it is not found, use `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`.
+- Run the state CLI as `adlc` (it is on PATH through this plugin's `bin/`). If it is not found, use the CLI fallback path listed under "Runtime values" in the skill that loaded these rules.
 - Read state with `adlc status` (add `--json` for structured output) and `adlc next --json`. Do not rely on memory of earlier turns.
 - Only the CLI changes `.agent-lifecycle/state.json` and `approvals.jsonl`. Hooks deny direct edits.
 - CLI exit codes: 0 ok, 1 usage, 2 rule violation, 3 concurrent modification, 4 no active change, 5 the command you ran failed (evidence recorded).
@@ -38,7 +38,7 @@ Each failed attempt goes through `adlc task repair <T> "<reason>"`, which enforc
 
 ## Build procedure
 1. `adlc next --json` lists `ready` tasks and tasks `in_flight`.
-2. For a ready task: `adlc dispatch start <T> --session ${CLAUDE_SESSION_ID}`. Note the lease id it prints.
+2. For a ready task: `adlc dispatch start <T> --session <session id>`, using the session id listed under "Runtime values" in the skill that loaded these rules (never invent one). Note the lease id it prints.
 3. Delegate to the `adlc:developer` subagent (or `adlc:tester` for a test-only task) with exactly this prompt:
    "Execute build packet .agent-lifecycle/packets/<T>.md under lease <L>. Follow the adlc worker contract."
    In sequential mode run one worker at a time and wait for it to finish.

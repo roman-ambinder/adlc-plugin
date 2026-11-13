@@ -3,6 +3,8 @@
 // Files only the adlc CLI (state.json, approvals.jsonl) or hooks (runs/) may write.
 const PROTECTED_PATH = /^\.agent-lifecycle\/(state\.json|approvals\.jsonl|runs\/)/;
 const PROTECTED_IN_CMD = /\.agent-lifecycle\/(state\.json|approvals\.jsonl|runs\/)/;
+// Bare names (e.g. after `cd .agent-lifecycle`): may be another project file, so these only ask.
+const MANAGED_NAME_IN_CMD = /(^|[\s/'"])(state\.json|approvals\.jsonl|bindings\.json|stops\.jsonl|writes\.jsonl|audit\.jsonl)\b|(^|[\s'"])runs\//;
 const WRITE_OPS = /(>|\btee\b|\bsed\s+-i|\brm\b|\bmv\b|\bcp\b|\btruncate\b|\bdd\b|\bpython3?\b|\bnode\b|\bperl\b|\bruby\b|\bchmod\b|\bln\b)/;
 
 const USER_ONLY = /\badlc\s+(approve|skip|unblock)\b/;
@@ -33,4 +35,4 @@ function riskyKind(cmd, level = 'strict') {
   return null;
 }
 
-module.exports = { PROTECTED_PATH, PROTECTED_IN_CMD, WRITE_OPS, USER_ONLY, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
+module.exports = { PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };

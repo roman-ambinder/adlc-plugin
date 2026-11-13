@@ -4,6 +4,10 @@ description: Run the adlc Specify, Plan and Design stages and prepare the plan f
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/coordinator/SKILL.md` first and follow it. Check `adlc next` before each step and skip steps for stages that are already completed or skipped.
 
+Runtime values for this session (substituted by Claude Code when this skill loads; the coordinator rules refer to them):
+- CLI fallback if `adlc` is not on PATH: `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`
+- Session id for `adlc dispatch start --session`: `${CLAUDE_SESSION_ID}`
+
 1. **Specify.** `adlc stage start specify`. Delegate to `adlc:analyst`: "Write measurable acceptance criteria for change <id> under '## Acceptance criteria' in .agent-lifecycle/requirements.md, one per line as `- AC-<n>: <observable behaviour>; verified by <command or check>`." Then `adlc stage complete specify` (it fails if there are no criteria).
 2. **Plan.** `adlc stage start plan`. Inspect the repository yourself: language, build, test, lint, format, type-check and security-check commands (package.json scripts, Makefile, pyproject.toml, CI config), conventions and the files the change affects. Write Context, Affected files and Risks in `.agent-lifecycle/plan.md`, outside the `adlc:begin/end` markers.
    - Split the work into small tasks, each one reviewable change. Write them as a JSON array to `.agent-lifecycle/tmp/tasks.json`. Fields: `title`, `goal`, `files` (explicit paths the task may write; avoid globs), `reads`, `deps` (task ids), `ac` (AC ids), `checks` (exact commands that prove the task, e.g. `node --test test/x.test.js`), `size` (`S`/`M`/`L`), `resources` (e.g. `"port:3000"`), `coupled` (true if it must run alone).

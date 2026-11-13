@@ -101,12 +101,21 @@ test('worker claim binds the agent and scopes its writes, git and adlc commands'
   assert.equal(decision(hook('guard', bash('adlc run --stage build --task T1 -- "npm test"', who), root)), null);
 });
 
-test('unbound developer writes are denied only in parallel modes', () => {
+test('workers must claim a task before writing, in every mode', () => {
   const who = { agent_id: 'agent-9', agent_type: 'adlc:developer' };
-  const seq = project();
-  assert.equal(decision(hook('guard', write(seq, 'src/a.js', who), seq)), null);
-  const shared = project({ mode: 'shared' });
-  assert.equal(decision(hook('guard', write(shared, 'src/a.js', who), shared)), 'deny');
+  for (const mode of ['sequential', 'shared']) {
+    const root = project({ mode });
+    assert.equal(decision(hook('guard', write(root, 'src/a.js', who), root)), 'deny', mode);
+  }
+  const root = project();
+  assert.equal(decision(hook('guard', write(root, 'src/a.js'), root)), null, 'the main session is not a worker');
+});
+
+test('indirect writes to managed files ask instead of passing silently', () => {
+  const root = project();
+  assert.equal(decision(hook('guard', bash('cd .agent-lifecycle && echo x >> approvals.jsonl'), root)), 'ask');
+  assert.equal(decision(hook('guard', bash('cd .agent-lifecycle/runs && rm stops.jsonl'), root)), 'ask');
+  assert.equal(decision(hook('guard', bash('cat state.json'), root)), null);
 });
 
 test('guard never emits allow', () => {

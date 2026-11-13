@@ -32,8 +32,8 @@ function decideWrite(input, ctx, binding) {
       const task = ((ctx.state && ctx.state.tasks) || []).find((t) => t.id === binding.task);
       const allowed = rel.startsWith('.agent-lifecycle/tmp/') || Boolean(task && task.files.some((g) => entriesOverlap(g, rel)));
       if (!allowed) return deny(`task ${binding.task} may only write its packet files (${task ? task.files.join(', ') : 'unknown task'}); ${rel} is outside. Report it under out_of_scope in your handoff`);
-    } else if (mode !== 'sequential') {
-      return deny('claim your task before editing: run `adlc worker claim <T> --lease <L>`');
+    } else {
+      return deny(`claim your task before editing (${mode} mode): run \`adlc worker claim <T> --lease <L>\``);
     }
   }
   return null;
@@ -43,6 +43,9 @@ function decideBash(input, ctx, binding, level) {
   const cmd = String((input.tool_input || {}).command || '');
   if (P.PROTECTED_IN_CMD.test(cmd) && P.WRITE_OPS.test(cmd)) {
     return deny('state.json, approvals.jsonl and runs/ are managed by the adlc CLI and hooks; use adlc commands (read state with `adlc status`)');
+  }
+  if (P.MANAGED_NAME_IN_CMD.test(cmd) && P.WRITE_OPS.test(cmd)) {
+    return ask(`this command may modify adlc-managed files (state.json, approvals.jsonl, runs/): \`${cmd}\`. Approve only if it targets a different file`);
   }
   for (const re of P.CHECK_BYPASS) if (re.test(cmd)) return deny('this command bypasses or masks checks (--no-verify, "|| true" after a check); run checks honestly and report failures');
   if (binding) {

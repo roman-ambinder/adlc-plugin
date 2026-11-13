@@ -4,6 +4,10 @@ description: Prepare the adlc release summary - changes, acceptance criteria sta
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/coordinator/SKILL.md` first and follow it.
 
+Runtime values for this session (substituted by Claude Code when this skill loads; the coordinator rules refer to them):
+- CLI fallback if `adlc` is not on PATH: `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`
+- Session id for `adlc dispatch start --session`: `${CLAUDE_SESSION_ID}`
+
 1. `adlc stage start release` (if it is not already in progress).
 2. `adlc trace` writes `.agent-lifecycle/traceability.md`. If any criterion has no evidence, stop and report it.
 3. Fill `.agent-lifecycle/release.md`: Summary of changes; Acceptance criteria status (refer to traceability.md); Migration; Deployment steps; Rollback steps; Known issues and unverified claims. Write "None." where a section does not apply. Take deployment steps only from the repository's own scripts and docs; if there are none, write "No deployment process found in the repository." Never invent steps.

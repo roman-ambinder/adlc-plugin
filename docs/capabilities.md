@@ -1,6 +1,6 @@
 # adlc capabilities — implemented, tested, unsupported
 
-Status as of version 0.1.0 (Slice 1), 2026-11-13. "Tested" means covered by `npm test` (84 tests, all passing at the time of writing) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
+Status as of version 0.1.0 (Slice 1), 2026-11-13. "Tested" means covered by `npm test` (90 tests, all passing at the time of writing) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
 
 ## Implemented and tested
 
@@ -18,7 +18,7 @@ Status as of version 0.1.0 (Slice 1), 2026-11-13. "Tested" means covered by `npm
 | Wave computation (dependency levels, file and resource overlap, serial patterns, coupled tasks), cycle detection | `lib/exec.js` | `tests/workflow.test.js` |
 | Readiness gate before dispatch, leases, no duplicate dispatch, per-session task budget | `lib/dispatch.js` | `tests/workflow.test.js` |
 | Structured handoff validation; integration check (evidence matching, ownership, stop record); cross-task checks required before integration | `lib/integrate.js` | `tests/workflow.test.js`, `tests/cli.test.js` |
-| Guard hook: protected state files, test-disabling edits, check bypasses, risky-command `ask`, user-only command `ask`, role write scopes, worker binding and scope, never `allow` | `hooks/guard.js` | `tests/hooks.test.js` |
+| Guard hook (Bash guarding is pattern-based and best-effort; scripts and indirection can bypass it): protected state files, test-disabling edits, check bypasses, risky-command `ask`, user-only command `ask`, role write scopes, workers must claim before writing, worker scope, never `allow` | `hooks/guard.js` | `tests/hooks.test.js` |
 | Audit, SubagentStop and SessionStart hooks; silence outside adlc projects | `hooks/*.js` | `tests/hooks.test.js` |
 | End-to-end walkthrough of one feature through every stage, using real CLI and hook scripts | `examples/slugify/run.sh` | `tests/e2e.test.js` |
 
@@ -52,3 +52,12 @@ Until then every `parallel_mode` value runs sequentially, and the reason is reco
 | Token use and cost are not observable from hooks | Recorded as `"not observable"`; the controls are `maxTurns`, the task budget and repair limits |
 | `bin/` prevents installation on claude.ai and Cowork | Claude Code CLI and desktop only |
 | Hook timeouts or crashes fail open at the platform level | Guard internal errors return `ask`; platform permission prompts still apply |
+
+## Departures from the design spec
+
+- `guard_level: standard` still asks for commits, pushes, PRs, installs, network access, destructive commands, publishing and deploying, because the safety rules require approval for all of them. `strict` adds merge, rebase, worktree and other history edits.
+- The reviewer agent has no Write or Edit tools. The coordinator saves the reviewer's report unchanged and records it with `adlc review add`.
+- `developer-worktree.md` (spec §6.2 and §8) is deferred to Slice 3, together with worktree mode.
+- Workers must run `adlc worker claim` before writing in every mode, not only in parallel modes, so every worker write is attributed.
+- `adlc task update`, `adlc lease stopped`, `adlc trace` and `adlc archive` were added during implementation.
+- Tests for Tasks 4–11 were written alongside the code rather than strictly before it.

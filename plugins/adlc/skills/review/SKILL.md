@@ -4,6 +4,10 @@ description: Run the adlc Review stage - an independent review of the change aga
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/coordinator/SKILL.md` first and follow it.
 
+Runtime values for this session (substituted by Claude Code when this skill loads; the coordinator rules refer to them):
+- CLI fallback if `adlc` is not on PATH: `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`
+- Session id for `adlc dispatch start --session`: `${CLAUDE_SESSION_ID}`
+
 1. `adlc stage start review`.
 2. Collect the changed files (`git status --short` and `git diff --stat`), and paths to requirements.md, decisions.md, packets/ and test-results/.
 3. Delegate to `adlc:reviewer`: "Review change <id> independently. Requirements: .agent-lifecycle/requirements.md. Decisions: .agent-lifecycle/decisions.md. Packets: .agent-lifecycle/packets/. Evidence: .agent-lifecycle/test-results/. Changed files: <list>. Use the format in ${CLAUDE_PLUGIN_ROOT}/templates/review.md. Separate blocking findings (correctness, security, requirement gaps, missing or weakened tests) from optional improvements, each with file:line and reasoning."

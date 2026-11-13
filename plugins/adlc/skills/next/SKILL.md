@@ -4,6 +4,10 @@ description: Run the next approved adlc stage (build, verify, review or release)
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/coordinator/SKILL.md` first and follow it.
 
+Runtime values for this session (substituted by Claude Code when this skill loads; the coordinator rules refer to them):
+- CLI fallback if `adlc` is not on PATH: `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`
+- Session id for `adlc dispatch start --session`: `${CLAUDE_SESSION_ID}`
+
 1. Run `adlc next --json`.
    - `blocked`: report the blocker and stop.
    - `done`: report that the change is complete and suggest `adlc archive` when the user is ready.

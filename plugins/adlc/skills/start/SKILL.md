@@ -5,10 +5,14 @@ argument-hint: "\"<title>\" [--type feature|bugfix] [--small]"
 
 Read `${CLAUDE_PLUGIN_ROOT}/skills/coordinator/SKILL.md` first and follow it throughout.
 
+Runtime values for this session (substituted by Claude Code when this skill loads; the coordinator rules refer to them):
+- CLI fallback if `adlc` is not on PATH: `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`
+- Session id for `adlc dispatch start --session`: `${CLAUDE_SESSION_ID}`
+
 1. Start the change (the configuration values come from the plugin's settings):
 
    ```
-   adlc start $ARGUMENTS --approval-gates "${user_config.approval_gates}" --parallel-mode "${user_config.parallel_mode}" --max-parallel "${user_config.max_parallel}" --max-repair-attempts "${user_config.max_repair_attempts}" --max-tasks-per-run "${user_config.max_tasks_per_run}" --serial-globs "${user_config.serial_globs}"
+   adlc start $ARGUMENTS --approval-gates '${user_config.approval_gates}' --parallel-mode '${user_config.parallel_mode}' --max-parallel '${user_config.max_parallel}' --max-repair-attempts '${user_config.max_repair_attempts}' --max-tasks-per-run '${user_config.max_tasks_per_run}' --serial-globs '${user_config.serial_globs}'
    ```
 
    If it exits 2 because a change already exists, show `adlc status` and stop.

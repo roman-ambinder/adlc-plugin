@@ -25,14 +25,14 @@ hooks: SessionStart (status) · PreToolUse (guard) · PostToolUse (audit) · Sub
 ```
 
 - **Skills** are the user interface and orchestration. They call the CLI.
-- **The CLI** holds every deterministic rule: stage order, gate hashes, task dependencies, leases, attempt limits, evidence. It refuses illegal transitions (exit code 2), so the model cannot talk its way past them.
+- **The CLI** holds every deterministic rule: stage order, gate hashes, task dependencies, leases, attempt limits, evidence. It refuses illegal transitions (exit code 2), so these rules hold however a request is phrased.
 - **Hooks** enforce boundaries through Claude Code's supported controls:
   - deny edits to state and approval files;
   - deny edits that skip tests;
   - deny writes outside a role's or task's scope;
   - ask before commits, pushes, PRs, installs, network access, destructive commands, publishing and deploying.
 
-  Hooks never return `allow`, so platform permission prompts always apply.
+  Hooks never return `allow`, so platform permission prompts always apply. Guarding of Bash commands is pattern-based and best-effort: scripts or indirection can get past it. File-tool writes, role scopes and the CLI rules are enforced reliably.
 - **Evidence** comes only from `adlc run`, which executes the command itself and records the exit code, duration and redacted output.
 
 The full design is in [docs/superpowers/specs/2026-11-13-adlc-plugin-design.md](docs/superpowers/specs/2026-11-13-adlc-plugin-design.md).
@@ -48,6 +48,36 @@ The full design is in [docs/superpowers/specs/2026-11-13-adlc-plugin-design.md](
 | Hook events, PreToolUse decisions, SubagentStop, `agent_id` | https://code.claude.com/docs/en/hooks |
 | Worktrees and `worktree.baseRef` | https://code.claude.com/docs/en/worktrees |
 | Marketplace file | https://code.claude.com/docs/en/plugins/marketplace-reference |
+
+## Directory tree
+
+```
+adlc-plugin/
+├── .claude-plugin/marketplace.json      local marketplace → ./plugins/adlc
+├── package.json                         npm test / npm run validate
+├── README.md
+├── docs/
+│   ├── capabilities.md                  implemented / tested / unsupported
+│   └── superpowers/                     design spec and implementation plan
+├── examples/slugify/
+│   ├── run.sh                           end-to-end walkthrough
+│   └── artifacts/                       .agent-lifecycle/ and code produced by run.sh
+├── plugins/adlc/
+│   ├── .claude-plugin/plugin.json       manifest + userConfig
+│   ├── bin/adlc                         state CLI (on the Bash PATH while enabled)
+│   ├── lib/                             cli, state, stages, tasks, packets, gates, rules,
+│   │                                    evidence, redact, exec, dispatch, integrate,
+│   │                                    fsutil, glob, errors
+│   ├── hooks/                           hooks.json, guard, audit, subagent-stop,
+│   │                                    session-start, common, patterns
+│   ├── skills/<name>/SKILL.md           start plan approve next status verify review
+│   │                                    resume release skip unblock coordinator worker-contract
+│   ├── agents/                          analyst architect developer tester reviewer
+│   ├── templates/                       requirements plan decisions handoff release review
+│   ├── schemas/                         state.schema.json, handoff.schema.json
+│   └── settings-template.json           permissions to copy into .claude/settings.json
+└── tests/                               node:test suites + helpers.js
+```
 
 ## Installation
 
@@ -199,7 +229,7 @@ npm test
 npm run validate
 ```
 
-`npm test` runs 84 `node:test` tests: state, stages, tasks, gates, evidence, dispatch, integration, CLI, hooks and the end-to-end example. `npm run validate` runs `claude plugin validate --strict` on the plugin and the marketplace.
+`npm test` runs 90 `node:test` tests: state, stages, tasks, gates, evidence, dispatch, integration, CLI, hooks, skill and agent files, and the end-to-end example. `npm run validate` runs `claude plugin validate --strict` on the plugin and the marketplace.
 
 ## Troubleshooting
 

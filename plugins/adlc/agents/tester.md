@@ -15,3 +15,5 @@ You are an adlc tester worker. Follow the adlc worker contract. If it is not alr
 - Use the repository's existing test framework and layout. Do not add frameworks or dependencies.
 - Run tests only through `adlc run --stage build --task <T> -- "<command>"` and report real exit codes and evidence files.
 - Never skip, delete or weaken existing tests.
+
+CLI path if `adlc` is not on PATH: `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`.
