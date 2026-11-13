@@ -310,7 +310,14 @@ test('integrate check flags files outside every task written after dispatch, but
   workerRun(root, s, { extraWrite: null });
   s.tasks[0].timing.dispatched_at = new Date(Date.now() - 30000).toISOString();
   writeFile(root, 'sneaky.js', 'written outside the task, e.g. by an interpreter');
+  // a file a check produced while `adlc run` was executing (coverage output, a lockfile rewrite) is not the worker's
+  writeFile(root, 'coverage/lcov.info', 'produced by npm test');
+  const ev = evidence.list(root).pop();
+  const at = (f, ms) => fs.utimesSync(path.join(root, f), new Date(ms), new Date(ms));
+  at('coverage/lcov.info', Date.parse(ev.ts) - 5);
+  at('sneaky.js', Date.parse(ev.ts) + 5000);
   const r = integrate.integrateCheck(root, s, 'T1');
-  assert.ok(r.problems.some((x) => /sneaky\.js/.test(x) && !/old-note/.test(x)), r.problems.join('\n'));
+  assert.ok(r.problems.some((x) => /sneaky\.js/.test(x) && !/old-note|coverage/.test(x)), r.problems.join('\n'));
   assert.ok(r.warnings.some((x) => /old-note\.txt/.test(x)));
+  assert.ok(r.warnings.some((x) => /coverage\/lcov\.info/.test(x)), 'check output only warns');
 });

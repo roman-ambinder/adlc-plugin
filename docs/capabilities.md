@@ -57,10 +57,16 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 - `${user_config.*}` was passed to the model unsubstituted when no plugin settings were saved, and the model dropped the flags. `adlc start` now resolves each setting as flag, then `CLAUDE_PLUGIN_OPTION_<NAME>`, then the default, and ignores an unsubstituted placeholder.
 - Build packets listed `AC-1 … AC-n` with no text, and the worker noted it had to guess from the goal. Packets now include each criterion's text from `requirements.md`.
 
-**Not covered by this run:** interactive sessions, parallel modes with the newly exercised agents, and a run with the user's real settings (the settings template was not applied, because the scratch repository was untrusted).
+**Not covered by this run:** interactive sessions.
+
+**Parallel builds re-tested with the new guard and the settings template (2026-11-13, Claude Code 2.1.325, `claude -p --settings plugins/adlc/settings-template.json`).** Scratch repository with a committed `package-lock.json` and a `pretest` script that writes `coverage/lcov.info` and touches the lockfile, plus two independent M tasks, once in shared and once in worktree mode.
+- Both modes ran two workers concurrently and both workers' checks passed.
+- **Bug found and fixed:** the stray-file rule added in the review blocked both tasks over `coverage/lcov.info`, and worktree mode's existing writable-set rule did the same (and would have put the file in the printed `git add`). Files modified while an `adlc run` check was executing are now attributed to the check: they warn, are left out of the commit and do not block `integrate done`. The window is the evidence's recorded duration plus 100 ms, so a worker's own stray write outside a check still fails.
+- Shared mode completed integration live. Worktree mode completed end to end with the user's commit and merge commands run by hand (`-p` cannot approve them): two `--no-ff` merges, `integrate done` accepted both.
+- One earlier worktree run had both workers' first Bash call denied by the platform permission layer (their claims never ran). It did not reproduce on a rerun with the same flags and I did not find the cause.
 
 **Still not live-tested**
-- An interactive session, as opposed to `-p`.
+- An interactive session, as opposed to `-p`, including typing `/adlc:approve` in the app so the `UserPromptSubmit` intent is recorded (verified only with `-p`).
 - SubagentStop's `last_assistant_message` was empty in `-p` (the subagent reported through its handback), so stop records have an empty excerpt.
 
 Set `ADLC_HOOK_LOG=<file>` to record hook metadata (event, tool, `agent_id`, `agent_type`, session, cwd; never tool input) when diagnosing.

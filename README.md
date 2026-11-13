@@ -165,7 +165,7 @@ Each parallel worker runs in its own git worktree (`adlc:developer-worktree`, `i
 - `.claude/worktrees/` listed in `.gitignore`;
 - no uncommitted changes outside `.agent-lifecycle/`, since worktrees only see committed files.
 
-Workers never commit. When a task passes `adlc integrate check`, the CLI prints the exact `git add`, `git commit` (in the worktree) and `git merge --no-ff` (into your current branch) commands. The coordinator shows them and runs them only through permission prompts. `adlc integrate done` refuses a task until its commit is merged into `HEAD` and the cross-task checks have run after the merge. Merge conflicts are aborted and reported, never resolved automatically.
+Workers never commit. When a task passes `adlc integrate check`, the CLI prints the exact `git add`, `git commit` (in the worktree) and `git merge --no-ff` (into your current branch) commands. The coordinator shows them and runs them only through permission prompts. Files that a check run wrote in the worktree (coverage output, lockfile rewrites) are left out of the printed `git add` and only warn. `adlc integrate done` refuses a task until its commit is merged into `HEAD` and the cross-task checks have run after the merge. Merge conflicts are aborted and reported, never resolved automatically.
 
 ## Project state: `.agent-lifecycle/`
 

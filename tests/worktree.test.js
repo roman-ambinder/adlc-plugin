@@ -150,6 +150,8 @@ test('integration rejects worktree changes outside the task', () => {
   const ws = path.join(root, '.claude/worktrees/T1');
   writeFile(ws, 'src/a.js', 'x');
   writeFile(ws, 'README.md', 'sneaky');
+  const earlier = new Date(Date.now() - 5000);
+  fs.utimesSync(path.join(ws, 'README.md'), earlier, earlier);
   const ev = JSON.parse(ok(cliFrom(ws, ['run', '--stage', 'build', '--task', 'T1', '--json', '--', 'test -f src/a.js'])));
   writeFile(ws, '.agent-lifecycle/tmp/h.json', JSON.stringify({
     task: 'T1', status: 'done', workspace: ws, branch: null, files_changed: ['src/a.js'], summary: 'done',
@@ -160,4 +162,26 @@ test('integration rejects worktree changes outside the task', () => {
   const r = cli(root, ['integrate', 'check', 'T1']);
   assert.equal(r.status, 2);
   assert.match(r.stdout, /outside T1's writable set: README\.md/);
+});
+
+test('worktree integration leaves out files a check run wrote and still requires a commit of the task change', () => {
+  const root = repo();
+  toBuild(root, TWO, { mode: 'auto' });
+  const d1 = JSON.parse(ok(cli(root, ['dispatch', 'start', 'T1', '--session', 's', '--json'])));
+  sh(root, 'git worktree add -q -b wt-T1 .claude/worktrees/T1 HEAD');
+  const ws = path.join(root, '.claude/worktrees/T1');
+  writeFile(ws, 'src/a.js', 'x');
+  // the check itself writes coverage output, as `pretest` scripts do
+  const ev = JSON.parse(ok(cliFrom(ws, ['run', '--stage', 'build', '--task', 'T1', '--json', '--', 'test -f src/a.js && mkdir -p coverage && echo x > coverage/lcov.info'])));
+  ok(cliFrom(ws, ['run', '--stage', 'build', '--task', 'T1', '--', 'test -f src/a.js']));
+  writeFile(ws, '.agent-lifecycle/tmp/h.json', JSON.stringify({
+    task: 'T1', status: 'done', workspace: ws, branch: null, files_changed: ['src/a.js'], summary: 'done',
+    checks: [{ cmd: ev.cmd, exit: 0, evidence: ev.file }], interface_changes: [], blockers: [], integration_notes: '', out_of_scope: [],
+  }));
+  ok(cliFrom(ws, ['worker', 'handoff', 'T1', '--file', '.agent-lifecycle/tmp/h.json']));
+  ok(cli(root, ['lease', 'stopped', d1.lease, 'test']));
+  const out = JSON.parse(ok(cli(root, ['integrate', 'check', 'T1', '--json'])));
+  assert.deepEqual(out.problems, []);
+  assert.ok(out.warnings.some((w) => /left out of the commit.*coverage\/lcov\.info/.test(w)));
+  assert.ok(out.commands[0].includes('src/a.js') && !out.commands[0].includes('coverage'), out.commands[0]);
 });
