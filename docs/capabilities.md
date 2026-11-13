@@ -42,11 +42,24 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 - The worker ran the CLI as `node "/…/bin/adlc" worker claim …`. The quote after `adlc` defeated the claim pattern, so the worker was never bound and the coordinator had to confirm the stop by hand. The claim, user-only and worker-subcommand patterns now accept a quoted CLI path.
 - The worker wrote files with shell heredocs (`cat > src/x.js <<EOF`), which neither the Write/Edit scope check nor the write log saw. Worker roles are now denied shell writes outside `.agent-lifecycle/tmp/`, and the worker contract says to use Write and Edit. In the re-run, every worker write went through the Write tool and was attributed in `runs/writes.jsonl`.
 
-**Attempted 2026-11-13 (review follow-up): live test of the remaining agents and skills.** The first scripted `claude -p` run failed before reaching the plugin: with the plugin copy outside the project, Claude Code denied reading `skills/coordinator/SKILL.md` and compound Bash commands, so no stage ran. The relaunch with broader tool permissions was blocked by the sandbox's auto-mode classifier, so these remain untested.
+**Live test of the remaining agents and skills (2026-11-13, Claude Code 2.1.325, `claude -p --plugin-dir --add-dir`, scoped `--allowedTools`, scratch repository with a `node --test` script).** The first attempt failed on test-harness permissions (plugin directory outside the project not readable, compound Bash commands not allowed); passing `--add-dir <plugin>` and a scoped allowlist fixed that.
+
+| Exercised live | Observed |
+|---|---|
+| `/adlc:start` (with `--small`, and without) | Change created; the analyst ran discover and its blocking questions were passed to the user |
+| `/adlc:plan` | Analyst wrote requirements with ACs; coordinator created tasks; architect wrote `D-1`/`C-1` in `decisions.md` |
+| `/adlc:approve plan` | Run by the test script as the user; build then started |
+| `/adlc:next` (build, verify, review) | Developer built the task and `integrate check` passed; tester ran `npm test` through `adlc run`; reviewer returned 0 blocking and 4 optional findings |
+| `/adlc:release` and `/adlc:approve release` | Release notes written, approval recorded, stage completed |
+| `/adlc:resume` | Recorded the user's answers and completed discover |
+
+**Findings and fixes from this run**
+- `${user_config.*}` was passed to the model unsubstituted when no plugin settings were saved, and the model dropped the flags. `adlc start` now resolves each setting as flag, then `CLAUDE_PLUGIN_OPTION_<NAME>`, then the default, and ignores an unsubstituted placeholder.
+- Build packets listed `AC-1 … AC-n` with no text, and the worker noted it had to guess from the goal. Packets now include each criterion's text from `requirements.md`.
+
+**Not covered by this run:** interactive sessions, parallel modes with the newly exercised agents, and a run with the user's real settings (the settings template was not applied, because the scratch repository was untrusted).
 
 **Still not live-tested**
-- `${user_config.*}` substitution in `/adlc:start` (the smoke test seeded state with the CLI).
-- The analyst, architect, reviewer and tester agents, and the plan, verify, review and release skills.
 - An interactive session, as opposed to `-p`.
 - SubagentStop's `last_assistant_message` was empty in `-p` (the subagent reported through its handback), so stop records have an empty excerpt.
 

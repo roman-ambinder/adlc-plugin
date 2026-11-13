@@ -124,3 +124,21 @@ test('handoff notes are appended with secrets redacted, and archive needs done o
   assert.equal(cli(root, ['status']).status, 4);
   ok(cli(root, ['start', 'next change']));
 });
+
+test('start takes settings from the flag, then CLAUDE_PLUGIN_OPTION_*, ignoring unsubstituted placeholders', () => {
+  const { spawnSync } = require('node:child_process');
+  const bin = path.join(__dirname, '../plugins/adlc/bin/adlc');
+  const run = (args, env) => {
+    const root = tmpdir();
+    const r = spawnSync('node', [bin, 'start', 'x', ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, ADLC_ROOT: root, ...env } });
+    assert.equal(r.status, 0, r.stderr);
+    const st = JSON.parse(fs.readFileSync(path.join(root, '.agent-lifecycle/state.json'), 'utf8'));
+    return { ...st.config, max_repair_attempts: st.budget.max_repair_attempts, max_parallel: st.execution.max_parallel };
+  };
+  assert.deepEqual(run([], {}).approval_gates, ['plan', 'release']);
+  assert.deepEqual(run([], { CLAUDE_PLUGIN_OPTION_APPROVAL_GATES: 'plan' }).approval_gates, ['plan']);
+  assert.deepEqual(run(['--approval-gates', '${user_config.approval_gates}'], { CLAUDE_PLUGIN_OPTION_APPROVAL_GATES: 'release' }).approval_gates, ['release']);
+  assert.deepEqual(run(['--approval-gates', 'plan'], { CLAUDE_PLUGIN_OPTION_APPROVAL_GATES: 'release' }).approval_gates, ['plan']);
+  assert.equal(run(['--max-repair-attempts', '${user_config.max_repair_attempts}'], {}).max_repair_attempts, 3);
+  assert.equal(run([], { CLAUDE_PLUGIN_OPTION_MAX_PARALLEL: '4' }).max_parallel, 4);
+});
