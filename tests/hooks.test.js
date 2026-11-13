@@ -50,9 +50,9 @@ test('guard denies direct writes to managed files but allows reading them', () =
   assert.equal(decision(hook('guard', write(root, '.agent-lifecycle/requirements.md'), root)), null);
 });
 
-test('guard asks before risky commands and user-only adlc commands', () => {
+test('guard asks before risky commands', () => {
   const root = project();
-  for (const cmd of ['git push origin main', 'git commit -m x', 'npm install left-pad', 'curl https://example.com', 'rm -rf build', 'npm publish', 'gh pr create', 'adlc approve plan', 'node /x/bin/adlc skip discover tiny', 'git merge feature']) {
+  for (const cmd of ['git push origin main', 'git commit -m x', 'npm install left-pad', 'curl https://example.com', 'rm -rf build', 'npm publish', 'gh pr create', 'git merge feature']) {
     assert.equal(decision(hook('guard', bash(cmd), root)), 'ask', cmd);
   }
   for (const cmd of ['ls -la', 'npm test', 'git status', 'git diff', 'adlc status', 'adlc run --stage verify -- "npm test"']) {
@@ -172,7 +172,7 @@ test('a claim made through a quoted CLI path binds the worker', () => {
   const bindings = JSON.parse(fs.readFileSync(path.join(root, '.agent-lifecycle/runs/bindings.json'), 'utf8'));
   assert.equal(bindings['agent-q'].lease, 'L-abc123');
   assert.equal(decision(hook('guard', bash('node "/x/bin/adlc" integrate done T1', who), root)), 'deny');
-  assert.equal(decision(hook('guard', bash('node "/x/bin/adlc" approve plan'), root)), 'ask');
+  assert.equal(decision(hook('guard', bash('node "/x/bin/adlc" approve plan'), root)), 'deny', 'no user prompt, no approval');
 });
 
 test('workers cannot write files through the shell, except into .agent-lifecycle/tmp/', () => {
@@ -254,4 +254,17 @@ test('guard asks before package runners, container runs and find -delete', () =>
   }
   assert.equal(decision(hook('guard', bash('find . -name "*.js"'), root)), null);
   assert.equal(decision(hook('guard', bash('docker run x', {}), root, { CLAUDE_PLUGIN_OPTION_GUARD_LEVEL: 'standard' })), null);
+});
+
+test('user-only adlc commands pass the guard only after the user typed the matching slash command', () => {
+  const { userPrompt } = require('./helpers');
+  const root = project();
+  assert.equal(decision(hook('guard', bash('adlc approve plan --note x'), root)), 'deny');
+  userPrompt(root, '/adlc:approve release');
+  assert.equal(decision(hook('guard', bash('adlc approve plan'), root)), 'deny', 'a release prompt does not cover plan');
+  assert.equal(decision(hook('guard', bash('adlc approve release --note x'), root)), null);
+  userPrompt(root, '/adlc:skip design too small');
+  assert.equal(decision(hook('guard', bash('adlc skip design "too small"'), root)), null);
+  userPrompt(root, '/adlc:unblock decided');
+  assert.equal(decision(hook('guard', bash('node "/x/bin/adlc" unblock "decided" --task T1'), root)), null);
 });

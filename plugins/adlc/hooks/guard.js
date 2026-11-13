@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { WRITE_TOOLS, readStdin, lifecycle, preToolDecision, roleOf, locate, workspaceOf, readBindings, updateBindings } = require('./common');
 const P = require('./patterns');
+const userIntent = require('../lib/userintent');
 const { entriesOverlap } = require('../lib/glob');
 
 const WORKER_ROLES = ['developer', 'developer-worktree', 'tester'];
@@ -88,7 +89,12 @@ function decideBash(input, ctx, binding, level) {
       if (!WORKER_ADLC.includes(m[1])) return deny(`workers may only run adlc ${WORKER_ADLC.join('|')} (attempted adlc ${m[1]})`);
     }
   }
-  if (P.USER_ONLY.test(cmd)) return ask(`user-only adlc action: \`${cmd}\`. Approve only if you asked for this yourself.`);
+  if (P.USER_ONLY.test(cmd)) {
+    // The user's own /adlc:<action> prompt (recorded by the UserPromptSubmit hook) is the approval: no second prompt.
+    const m = cmd.match(P.USER_ONLY_ARG);
+    if (m && userIntent.pending(ctx.root, m[1], m[1] === 'unblock' ? null : m[2])) return null;
+    return deny(`only the user can run \`adlc ${m ? m[1] : 'approve|skip|unblock'}\`: ask them to type /adlc:${m ? m[1] : 'approve'}${m && m[2] ? ` ${m[2]}` : ''} themselves, then run it once. Do not try to get around this`);
+  }
   const kind = P.riskyKind(cmd, level);
   if (kind) return ask(`${kind} requires your approval: \`${cmd}\``);
   return null;

@@ -17,7 +17,19 @@ function cleanEnv(extra = {}) {
   return { ...env, ...extra };
 }
 
+const USER_ONLY = ['approve', 'skip', 'unblock'];
+
+// Plays the user: submits the prompt the user would type, which the UserPromptSubmit hook turns into an intent.
+function userPrompt(root, prompt) {
+  return spawnSync(process.execPath, [path.join(PLUGIN, 'hooks', 'prompt-submit.js')], {
+    input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt, session_id: 's-test' }), encoding: 'utf8', env: cleanEnv({ CLAUDE_PROJECT_DIR: root }),
+  });
+}
+
+// For user-only commands the user's prompt is simulated first, unless `asModel` is set (a model-run command, no user prompt).
 function cli(root, args, extraEnv = {}) {
+  if (USER_ONLY.includes(args[0]) && !extraEnv.asModel) userPrompt(root, `/adlc:${args[0]} ${args.slice(1).join(' ')}`);
+  delete extraEnv.asModel;
   return spawnSync(process.execPath, [path.join(PLUGIN, 'bin', 'adlc'), ...args], {
     cwd: root, encoding: 'utf8', env: cleanEnv({ ADLC_ROOT: root, ...extraEnv }),
   });
@@ -61,4 +73,4 @@ function toBuild(root, taskList, { mode = 'sequential', approve = true } = {}) {
   }
 }
 
-module.exports = { PLUGIN, lib, tmpdir, cli, hook, ok, writeFile, toBuild, TASK, REQUIREMENTS };
+module.exports = { userPrompt, PLUGIN, lib, tmpdir, cli, hook, ok, writeFile, toBuild, TASK, REQUIREMENTS };

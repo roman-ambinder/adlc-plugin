@@ -18,6 +18,7 @@ cd "$WORK"
 
 adlc() { ADLC_ROOT="$WORK" node "$PLUGIN/bin/adlc" "$@"; }
 hook() { printf '%s' "$2" | CLAUDE_PROJECT_DIR="$WORK" node "$PLUGIN/hooks/$1.js"; }
+userprompt() { printf '{"hook_event_name":"UserPromptSubmit","session_id":"e2e","prompt":"%s"}' "$1" | CLAUDE_PROJECT_DIR="$WORK" node "$PLUGIN/hooks/prompt-submit.js"; }
 field() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s)[process.argv[1]]))' "$1"; }
 say() { printf '\n== %s\n' "$*"; }
 
@@ -85,6 +86,7 @@ adlc stage complete plan
 say "4. Approval (the user runs /adlc:approve plan; here the script plays the user)"
 if adlc stage start build 2>/dev/null; then echo "ERROR: build started without approval" >&2; exit 1; fi
 echo "build refused without approval, as expected"
+userprompt "/adlc:approve plan"
 adlc approve plan --note "e2e: user reviewed requirements, plan and packet"
 adlc stage start build
 
@@ -228,6 +230,7 @@ Revert the commit that adds `src/slugify.js` and `test/slugify.test.js`; nothing
 
 - Non-ASCII letters are dropped, not transliterated (review O1).
 EOF
+userprompt "/adlc:approve release"
 adlc approve release --note "e2e: user reviewed release notes"
 adlc stage complete release
 

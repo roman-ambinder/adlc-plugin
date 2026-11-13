@@ -48,7 +48,7 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 |---|---|
 | `/adlc:start` (with `--small`, and without) | Change created; the analyst ran discover and its blocking questions were passed to the user |
 | `/adlc:plan` | Analyst wrote requirements with ACs; coordinator created tasks; architect wrote `D-1`/`C-1` in `decisions.md` |
-| `/adlc:approve plan` | Run by the test script as the user; build then started |
+| `/adlc:approve plan` | Run by the test script as the user; build then started. Re-verified with the intent check: prose request refused, slash command accepted (see the platform table) |
 | `/adlc:next` (build, verify, review) | Developer built the task and `integrate check` passed; tester ran `npm test` through `adlc run`; reviewer returned 0 blocking and 4 optional findings |
 | `/adlc:release` and `/adlc:approve release` | Release notes written, approval recorded, stage completed |
 | `/adlc:resume` | Recorded the user's answers and completed discover |
@@ -110,7 +110,7 @@ Implemented, tested (`tests/worktree.test.js`, which uses real `git worktree`s) 
 |---|---|
 | A plugin cannot ship permission rules | `settings-template.json` to copy into `.claude/settings.json`; guard hook `deny`/`ask` |
 | `permissionMode`, `hooks`, `mcpServers` and `initialPrompt` are ignored in plugin agents | Plugin-level hooks plus per-agent `tools` allowlists |
-| Hooks cannot tell whether a Bash command came from the user's request or the model | User-only skills use `disable-model-invocation: true`, and the guard asks before `adlc approve`, `skip` and `unblock` so the exact command is always shown |
+| Hooks cannot tell whether a Bash command came from the user's request or the model | User-only skills use `disable-model-invocation: true`. The `UserPromptSubmit` hook, which sees only prompts the user submits, records an intent when the user types `/adlc:approve`, `/adlc:skip` or `/adlc:unblock`; the CLI and guard require a matching, unexpired, unused intent (or a terminal). Live-verified 2026-11-13: a prose request to run `adlc approve plan` was blocked, and the slash command approved once. A command written by a shell script to `runs/` is still the best-effort Bash limit |
 | A plugin cannot set `worktree.baseRef` | Worktree mode (when implemented) requires the user to set it; `auto` will not select worktree mode without it |
 | File writes made through the Bash tool cannot be attributed at write time | Detected afterwards by `integrate check`, using `git status` and the handoff's file list |
 | Token use and cost are not observable from hooks | Recorded as `"not observable"`; the controls are `maxTurns`, the task budget and repair limits |

@@ -10,6 +10,8 @@ const WRITE_OPS = /(>|\btee\b|\bsed\s+-i|\brm\b|\bmv\b|\bcp\b|\btruncate\b|\bdd\
 // `adlc` may appear as a bare command or as a quoted path ending in bin/adlc, e.g. node "/x/bin/adlc" claim.
 const ADLC = String.raw`\badlc['"]?\s+`;
 const USER_ONLY = new RegExp(`${ADLC}(approve|skip|unblock)\\b`);
+// Same as USER_ONLY, capturing the action and its first argument (gate or stage).
+const USER_ONLY_ARG = new RegExp(`${ADLC}(approve|skip|unblock)\\b\\s*['"]?([^\\s'"]*)`);
 const ADLC_SUBCOMMAND = new RegExp(`${ADLC}([a-z-]+)`, 'g');
 const WORKER_CLAIM = new RegExp(`${ADLC}worker\\s+claim\\s+['"]?(T\\d+)['"]?\\s+--lease\\s+['"]?(L-[0-9a-f]+)`);
 
@@ -72,4 +74,4 @@ function riskyKind(cmd, level = 'strict') {
   return null;
 }
 
-module.exports = { countTests, SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
+module.exports = { USER_ONLY_ARG, countTests, SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };

@@ -21,7 +21,7 @@ you ──/adlc:* skills──▶ main session (coordinator rules)
                   adlc CLI (bin/adlc, Node ≥ 18, no dependencies)
                              │  locked, revision-checked, atomic writes
                     .agent-lifecycle/                     project state
-hooks: SessionStart (status) · PreToolUse (guard) · PostToolUse (audit) · SubagentStop (worker stopped)
+hooks: SessionStart (status) · UserPromptSubmit (user intent) · PreToolUse (guard) · PostToolUse (audit) · SubagentStop (worker stopped)
 ```
 
 - **Skills** are the user interface and orchestration. They call the CLI.
@@ -110,7 +110,7 @@ After changing plugin files, run `/reload-plugins` or start a new session.
 - keeps commits, pushes, PRs, installs and publishing on `ask`;
 - denies the Read tool on `.env`, keys and similar files (the guard hook also blocks them in Bash commands and Read calls).
 
-`approve`, `skip`, `unblock` and `lease` are deliberately left out of the allow list.
+`approve`, `skip`, `unblock` and `lease` are deliberately left out of the allow list; your own slash command is what authorises the first three.
 
 ## Commands
 
@@ -198,7 +198,7 @@ Workers never commit. When a task passes `adlc integrate check`, the CLI prints 
 - **Approvals.**
   - Gate approvals hash the covered artifacts, so changing scope makes an approval stale.
   - Approve, skip and unblock skills use `disable-model-invocation: true`, so only you can start them.
-  - The guard also asks before any `adlc approve|skip|unblock` command, so you see the exact command every time.
+  - The CLI refuses `adlc approve|skip|unblock` unless you typed the matching `/adlc:approve`, `/adlc:skip` or `/adlc:unblock` yourself. A `UserPromptSubmit` hook records each of your slash commands as a single-use intent that expires after 15 minutes; a command the model runs on its own, or after you only asked in prose, is refused. A person at a terminal running `adlc` directly is accepted without a prompt. The guard denies such commands early with the same explanation. Intents live in `.agent-lifecycle/runs/`, which hooks and the guard protect.
 - **Least privilege.**
   - Each agent has a tool allowlist; the reviewer has no Write or Edit.
   - Hooks deny the analyst and architect writes outside their file.

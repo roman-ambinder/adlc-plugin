@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const st = require('./state');
+const userIntent = require('./userintent');
 const stages = require('./stages');
 const tasks = require('./tasks');
 const packets = require('./packets');
@@ -207,6 +208,7 @@ const handlers = {
   skip({ root, pos }) {
     const stage = need(pos[1], 'usage: adlc skip <stage> <reason>');
     const reason = need(pos.slice(2).join(' '), 'a skip reason is required: adlc skip <stage> <reason>');
+    userIntent.require(root, 'skip', stage);
     const change = st.mutate(root, (s) => {
       stages.skipStage(s, stage, reason);
       return s.change.id;
@@ -217,6 +219,7 @@ const handlers = {
 
   unblock({ root, pos, flags }) {
     const note = need(pos.slice(1).join(' '), 'usage: adlc unblock <note> [--task T]');
+    userIntent.require(root, 'unblock');
     const change = st.mutate(root, (s) => {
       s.blocker = null;
       if (flags.task) tasks.unblockTask(s, flags.task);
@@ -321,6 +324,7 @@ const handlers = {
 
   approve({ root, pos, flags }) {
     const gate = need(pos[1], 'usage: adlc approve <plan|release> [--note text]');
+    userIntent.require(root, 'approve', gate);
     const rec = gates.approve(root, st.load(root), gate, typeof flags.note === 'string' ? flags.note : '');
     return { obj: rec, text: `approved ${gate} (hash ${rec.hash.slice(0, 12)})` };
   },
