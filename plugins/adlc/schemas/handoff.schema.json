@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "adlc/handoff.schema.json",
+  "title": "adlc worker handoff",
+  "description": "Submitted by a worker with `adlc worker handoff <T> --file <path>`. Validated by lib/integrate.js validateHandoff().",
+  "type": "object",
+  "required": ["task", "status", "workspace", "branch", "files_changed", "summary", "checks", "interface_changes", "blockers", "integration_notes", "out_of_scope"],
+  "properties": {
+    "task": { "type": "string", "pattern": "^T\\d+$" },
+    "status": { "enum": ["done", "blocked", "partial"] },
+    "workspace": { "type": "string", "minLength": 1 },
+    "branch": { "type": ["string", "null"] },
+    "files_changed": { "type": "array", "items": { "type": "string" } },
+    "summary": { "type": "string", "minLength": 1 },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["cmd", "exit", "evidence"],
+        "properties": {
+          "cmd": { "type": "string" },
+          "exit": { "type": "integer" },
+          "evidence": { "type": "string", "description": "file path printed by adlc run, e.g. test-results/E-...-build-T1.md" }
+        }
+      }
+    },
+    "interface_changes": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "integration_notes": { "type": "string" },
+    "out_of_scope": { "type": "array", "items": { "type": "string" } }
+  }
+}
