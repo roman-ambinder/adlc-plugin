@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+- **A new session could not dispatch once an earlier session used up the task budget.** `adlc next` checked the earlier session's count before any reset, so no task was listed as ready and the build stalled. The budget now applies per session the hooks recorded. Found by a live test.
+- **A second review finding for the same task was lost.** `adlc task repair` refused a task already reopened by an earlier finding. It now adds the finding to the task's repair note without using another attempt, and the review skill groups findings by task. Found by a live test.
+
 ### Security
 - **User intents could be forged.** Running `hooks/prompt-submit.js` by hand with a fake `/adlc:approve`, `/adlc:skip` or similar prompt recorded an intent the CLI accepted. The CLI now also requires the user's typed command in Claude Code's own session transcript, and each transcript entry authorises one action. The guard denies running adlc hook scripts by hand, writing to the transcripts, and setting `CLAUDE_CONFIG_DIR` on user-only commands. Found by a live test.
 

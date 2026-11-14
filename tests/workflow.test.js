@@ -348,3 +348,25 @@ test('review findings are counted from the report', () => {
   assert.match(rules.reviewCounts(report('')).problems[0], /must hold/);
   assert.match(rules.reviewCounts('# Review\n\nLooks good.\n').problems[0], /no "## Blocking findings" section/);
 });
+
+test('a new recorded session is not blocked by the previous session\'s task budget', () => {
+  const { root, s } = planned([TASK(), TASK({ files: ['src/b.js'] })], { mode: 'sequential' });
+  s.budget.max_tasks_per_run = 1;
+  fsu.appendLine(path.join(st.paths(root).runs, 'sessions.jsonl'), { session: 'a' });
+  dispatch.startDispatch(root, s, 'T1', { session: 'a' });
+  s.leases[0].status = 'returned';
+  s.tasks[0].status = 'integrated';
+  assert.deepEqual(dispatch.readyToDispatch(root, s).map((t) => t.id), [], 'same session: budget used up');
+  fsu.appendLine(path.join(st.paths(root).runs, 'sessions.jsonl'), { session: 'b' });
+  assert.deepEqual(dispatch.readyToDispatch(root, s).map((t) => t.id), ['T2'], 'a new session the hooks recorded is a new run');
+  assert.equal(dispatch.usedThisRun(root, s), 0);
+});
+
+test('a task already sent back for repair collects further findings without using another attempt', () => {
+  const { s } = planned([TASK()]);
+  s.tasks[0].status = 'integrated';
+  assert.equal(tasks.repairTask(s, 'T1', 'B1: missing test'), 'todo');
+  assert.equal(tasks.repairTask(s, 'T1', 'B3: another gap'), 'todo');
+  assert.equal(s.tasks[0].attempts, 1);
+  assert.match(s.tasks[0].last_failure, /B1: missing test\n- B3: another gap/);
+});

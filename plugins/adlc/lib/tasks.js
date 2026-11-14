@@ -157,6 +157,11 @@ function unblockTask(s, id) {
 // Records one failed attempt. Returns the task's new status ("todo" or "blocked").
 function repairTask(s, id, note = '') {
   const t = getTask(s, id);
+  // A task already sent back for repair collects further findings without using another attempt.
+  if (t.status === 'todo' && t.attempts > 0 && t.last_failure) {
+    if (note) t.last_failure = `${t.last_failure}\n- ${note}`;
+    return 'todo';
+  }
   if (!['dispatched', 'returned', 'integrated'].includes(t.status)) {
     throw rule(`${id} is ${t.status}; only dispatched, returned or integrated tasks can be repaired${t.status === 'blocked' ? ' (the user can reset it with /adlc:unblock)' : ''}`);
   }
