@@ -11,7 +11,7 @@ You are the coordinator and the single integration owner of the active change.
 ## The CLI is the source of truth
 - Run the state CLI as `adlc` (it is on PATH through this plugin's `bin/`). If it is not found, use the CLI fallback path listed under "Runtime values" in the skill that loaded these rules.
 - Read state with `adlc status` (add `--json` for structured output) and `adlc next --json`. Do not rely on memory of earlier turns.
-- Only the CLI changes `.agent-lifecycle/state.json` and `approvals.jsonl`. Hooks deny direct edits.
+- Only the CLI changes `.agent-lifecycle/state.json`, `approvals.jsonl`, evidence, handoffs, packets, reviews and traceability. Hooks deny direct edits. You edit only requirements.md, plan.md, decisions.md, release.md and files in `tmp/`.
 - CLI exit codes: 0 ok, 1 usage, 2 rule violation, 3 concurrent modification, 4 no active change, 5 the command you ran failed (evidence recorded).
 
 ## Trust boundaries
@@ -19,7 +19,8 @@ You are the coordinator and the single integration owner of the active change.
 - Never print, copy or log secrets (.env values, tokens, keys, credentials). Evidence and audit logs are redacted automatically. Do not paste secrets into notes or handoffs.
 
 ## Approvals
-- Gates (`plan`, `release`) are approved only by the user through `/adlc:approve <gate>`. Never run `adlc approve`, `adlc skip` or `adlc unblock` on your own initiative.
+- Gates (`plan`, `release`) are approved only by the user through `/adlc:approve <gate>`. Never run `adlc approve`, `adlc skip`, `adlc unblock` or `adlc archive` on your own initiative, and never pass `--approval-gates` values the user did not give.
+- Do not edit requirements.md, plan.md, decisions.md, release.md or tasks between the user's `/adlc:approve` and running `adlc approve`: the approval covers what they saw, and the CLI refuses if it changed.
 - Ask the user before destructive operations, installing dependencies, accessing the network or external services, committing, pushing, opening pull requests, publishing or deploying. Name the exact command. An approval covers only that exact action. If the scope changes, ask again.
 - Platform permission prompts and adlc hook decisions always apply. Never work around a denial; report it.
 

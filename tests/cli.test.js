@@ -128,8 +128,11 @@ test('handoff notes are appended with secrets redacted, and archive needs done o
 test('start takes settings from the flag, then CLAUDE_PLUGIN_OPTION_*, ignoring unsubstituted placeholders', () => {
   const { spawnSync } = require('node:child_process');
   const bin = path.join(__dirname, '../plugins/adlc/bin/adlc');
+  const { userPrompt } = require('./helpers');
   const run = (args, env) => {
     const root = tmpdir();
+    // reduced gates need the user's own /adlc:start; the hook sees the same plugin settings
+    userPrompt(root, `/adlc:start x ${args.join(' ')}`, env);
     const r = spawnSync('node', [bin, 'start', 'x', ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, ADLC_ROOT: root, ...env } });
     assert.equal(r.status, 0, r.stderr);
     const st = JSON.parse(fs.readFileSync(path.join(root, '.agent-lifecycle/state.json'), 'utf8'));
@@ -175,4 +178,65 @@ test('an intent expires after fifteen minutes and is ignored outside adlc projec
   const { userPrompt } = require('./helpers');
   assert.equal(userPrompt(bare, '/adlc:approve plan').status, 0);
   assert.equal(fs.existsSync(path.join(bare, '.agent-lifecycle')), false);
+});
+
+test('reduced approval gates need the user\'s own /adlc:start', () => {
+  const { userPrompt } = require('./helpers');
+  const root = tmpdir();
+  const r = cli(root, ['start', 'x', '--approval-gates', 'none']);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /approval gates reduced to "none"/);
+  assert.equal(fs.existsSync(path.join(root, '.agent-lifecycle/state.json')), false);
+  // a prompt that asks for other gates does not cover it
+  userPrompt(root, '/adlc:start x --approval-gates plan');
+  assert.equal(cli(root, ['start', 'x', '--approval-gates', 'none']).status, 2);
+  userPrompt(root, '/adlc:start x --approval-gates none');
+  ok(cli(root, ['start', 'x', '--approval-gates', 'none']));
+  // full gates never need an intent
+  ok(cli(tmpdir(), ['start', 'y', '--approval-gates', 'release,plan']));
+});
+
+test('an approval covers what the user saw: edits after the prompt are refused and the prompt stays usable', () => {
+  const { userPrompt } = require('./helpers');
+  const root = tmpdir();
+  toBuild(root, [TASK()], { approve: false });
+  const asModel = (args) => cli(root, args, { asModel: true });
+  userPrompt(root, '/adlc:approve plan');
+  const plan = path.join(root, '.agent-lifecycle/plan.md');
+  const before = fs.readFileSync(plan, 'utf8');
+  fs.writeFileSync(plan, `${before}\nsneaked in after the prompt\n`);
+  const r = asModel(['approve', 'plan']);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /changed after the user typed/);
+  // nothing was consumed: with the files back as the user saw them, the same prompt still approves once
+  fs.writeFileSync(plan, before);
+  assert.equal(asModel(['approve', 'plan']).status, 0);
+  assert.equal(asModel(['approve', 'plan']).status, 2);
+});
+
+test('a refused action does not use up the user\'s prompt, and there is no terminal shortcut', () => {
+  const { userPrompt } = require('./helpers');
+  const root = tmpdir();
+  ok(cli(root, ['start', 'x']));
+  const asModel = (args) => cli(root, args, { asModel: true });
+  userPrompt(root, '/adlc:skip build no');
+  assert.equal(asModel(['skip', 'build', 'no']).status, 2, 'build cannot be skipped');
+  assert.ok(lib('userintent').pending(root, 'skip', 'build'), 'intent still pending');
+  assert.equal(asModel(['archive', '--force']).status, 2, 'archive is user-only');
+  assert.equal(lib('userintent').humanAtTerminal, undefined);
+  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '../plugins/adlc/lib/userintent.js'), 'utf8'), /isTTY/);
+});
+
+test('hooks and the CLI agree on the root when the session starts in a subdirectory', () => {
+  const { hook } = require('./helpers');
+  const root = tmpdir();
+  ok(cli(root, ['start', 'x']));
+  const sub = path.join(root, 'packages/app');
+  fs.mkdirSync(sub, { recursive: true });
+  const input = { hook_event_name: 'PreToolUse', tool_name: 'Write', cwd: sub, tool_input: { file_path: path.join(root, '.agent-lifecycle/state.json'), content: '{}' } };
+  const r = hook('guard', input, sub);
+  assert.match(r.stdout, /"permissionDecision":"deny"/);
+  const p = require('./helpers').userPrompt(sub, '/adlc:unblock go on');
+  assert.equal(p.status, 0);
+  assert.ok(lib('userintent').pending(root, 'unblock'));
 });

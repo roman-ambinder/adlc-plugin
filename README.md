@@ -27,7 +27,7 @@ hooks: SessionStart (status) · UserPromptSubmit (user intent) · PreToolUse (gu
 - **Skills** are the user interface and orchestration. They call the CLI.
 - **The CLI** holds every deterministic rule: stage order, gate hashes, task dependencies, leases, attempt limits, evidence. It refuses illegal transitions (exit code 2), so these rules hold however a request is phrased.
 - **Hooks** enforce boundaries through Claude Code's supported controls:
-  - deny edits to state and approval files;
+  - deny edits to everything the CLI writes under `.agent-lifecycle/` (state, approvals, evidence, handoffs, packets, reviews, traceability), and commands that remove or move that directory;
   - deny edits that skip tests;
   - deny commands that mask a check's exit status (`|| true`, `; exit 0`, `set +e`), and `adlc run` refuses to record them;
   - deny reading `.env`, keys and certificates through Bash or the Read tool;
@@ -69,11 +69,11 @@ adlc-plugin/
 │   ├── bin/adlc                         state CLI (on the Bash PATH while enabled)
 │   ├── lib/                             cli, state, stages, tasks, packets, gates, rules,
 │   │                                    evidence, redact, exec, dispatch, integrate,
-│   │                                    worktree, fsutil, glob, errors
+│   │                                    worktree, fsutil, glob, errors, masking, userintent
 │   ├── hooks/                           hooks.json, guard, audit, subagent-stop,
-│   │                                    session-start, common, patterns
+│   │                                    session-start, prompt-submit, common, patterns
 │   ├── skills/<name>/SKILL.md           start plan approve next status verify review
-│   │                                    resume release skip unblock coordinator worker-contract
+│   │                                    resume release skip unblock archive coordinator worker-contract
 │   ├── agents/                          analyst architect developer developer-worktree tester reviewer
 │   ├── templates/                       requirements plan decisions handoff release review
 │   ├── schemas/                         state.schema.json, handoff.schema.json
@@ -110,7 +110,7 @@ After changing plugin files, run `/reload-plugins` or start a new session.
 - keeps commits, pushes, PRs, installs and publishing on `ask`;
 - denies the Read tool on `.env`, keys and similar files (the guard hook also blocks them in Bash commands and Read calls).
 
-`approve`, `skip`, `unblock` and `lease` are deliberately left out of the allow list; your own slash command is what authorises the first three.
+`approve`, `skip`, `unblock`, `archive` and `lease` are deliberately left out of the allow list; your own slash command is what authorises the first four.
 
 ## Commands
 
@@ -127,6 +127,7 @@ After changing plugin files, run `/reload-plugins` or start a new session.
 | `/adlc:release` | Traceability, release notes (changes, migration, deployment, rollback), then complete after approval |
 | `/adlc:skip <stage> <reason>` | **User-only.** Skip discover, specify, design or release |
 | `/adlc:unblock <note> [--task T]` | **User-only.** Clear a blocker, for example a task that hit its repair limit |
+| `/adlc:archive [--force]` | **User-only.** Move the change to `.agent-lifecycle/archive/` so a new one can start. `--force` archives a change that is not done |
 
 The underlying CLI is `adlc` (on the Bash tool's PATH while the plugin is enabled). Run `adlc help` for every subcommand. Exit codes:
 
@@ -146,7 +147,7 @@ Set these when enabling the plugin, or later with `/plugin` → Installed → Co
 
 | Option | Default | Meaning |
 |---|---|---|
-| `approval_gates` | `plan,release` | Gates that need your approval. `none` disables them; platform prompts and guard prompts still apply |
+| `approval_gates` | `plan,release` | Gates that need your approval. `none` disables them; platform prompts and guard prompts still apply. Fewer gates than the default take effect only when you type `/adlc:start` yourself |
 | `guard_level` | `strict` | `standard` asks before commit, push, PR, install, network, destructive, publish and deploy commands. `strict` also asks before merge, rebase, worktree and other history edits |
 | `max_repair_attempts` | `3` | Failed attempts per task before it is blocked and work stops |
 | `max_tasks_per_run` | `5` | Tasks dispatched per session before the coordinator stops and writes a handoff |
@@ -198,9 +199,12 @@ Workers never commit. When a task passes `adlc integrate check`, the CLI prints 
 - **Approvals.**
   - Gate approvals hash the covered artifacts, so changing scope makes an approval stale.
   - Approve, skip and unblock skills use `disable-model-invocation: true`, so only you can start them.
-  - The CLI refuses `adlc approve|skip|unblock` unless you typed the matching `/adlc:approve`, `/adlc:skip` or `/adlc:unblock` yourself. A `UserPromptSubmit` hook records each of your slash commands as a single-use intent that expires after 15 minutes; a command the model runs on its own, or after you only asked in prose, is refused. A person at a terminal running `adlc` directly is accepted without a prompt. The guard denies such commands early with the same explanation. Intents live in `.agent-lifecycle/runs/`, which hooks and the guard protect.
+  - The CLI refuses `adlc approve`, `skip`, `unblock` and `archive` unless you typed the matching slash command yourself. A `UserPromptSubmit` hook records each of your slash commands as a single-use intent that expires after 15 minutes; a command the model runs on its own, or after you only asked in prose, is refused. There is no terminal shortcut: at a terminal, type the slash command in Claude Code too. The guard denies such commands early with the same explanation. Intents live in `.agent-lifecycle/runs/`, which hooks and the guard protect.
+  - An approval intent stores the gate hash from the moment you typed `/adlc:approve`. If a covered file changes before the approval is recorded, the CLI refuses and you approve again.
+  - A refused action does not use up your prompt.
+  - `adlc start` with fewer gates than `plan,release` needs your own `/adlc:start` (the gates come from your prompt or your plugin setting).
 - **Least privilege.**
-  - Each agent has a tool allowlist; the reviewer has no Write or Edit.
+  - Each agent has a tool allowlist; the reviewer has no Write or Edit, and no adlc subagent may write files through the shell.
   - Hooks deny the analyst and architect writes outside their file.
   - A worker that has claimed a task may write only that task's files, and may not run git or state-changing `adlc` commands.
 - **Honesty.**
@@ -249,12 +253,13 @@ npm run validate
 | Symptom | Fix |
 |---|---|
 | `adlc: command not found` in Bash | The plugin must be enabled. Skills fall back to `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`; you can run `node plugins/adlc/bin/adlc` from a checkout |
+| `the user has not asked for this` | Type the slash command yourself (`/adlc:approve plan`, `/adlc:archive`, …). Scripts must submit the prompt to the `UserPromptSubmit` hook first, as `examples/slugify/run.sh` does |
 | `no active change` (exit 4) | Run `/adlc:start` first. The CLI finds `.agent-lifecycle/` by walking up from the current directory, or uses `ADLC_ROOT` |
 | `plan gate not approved` / `approval is stale` | Review the files, then run `/adlc:approve plan` again. Any edit to the covered files (requirements, plan, decisions) or to the tasks, contracts or execution plan after approval needs a new approval. Packets are rendered from the tasks, so they are covered through them; a hand edit to a packet is overwritten at the next dispatch |
 | `state changed concurrently` (exit 3) | Another adlc process wrote state. Re-run the command |
 | `no SubagentStop record for L-…` | The worker may still be running. Once it has returned, inspect its changes and run `adlc lease stopped <L> "<note>"` |
 | Task blocked after repeated failures | Read its evidence and handoff, decide the approach, then `/adlc:unblock "<note>" --task T<n>` |
-| Hooks seem inactive | Hooks only act in projects with `.agent-lifecycle/state.json`. Check `/plugin` → Errors, and `claude --debug` |
+| Hooks seem inactive | Hooks act when `.agent-lifecycle/state.json` exists in the project directory or a parent of it (the same lookup as the CLI). Check `/plugin` → Errors, and `claude --debug` |
 | Need to see what hooks receive | Start Claude Code with `ADLC_HOOK_LOG=/tmp/adlc-hooks.jsonl` to log hook metadata (never tool input) |
 | Too many permission prompts | Copy `plugins/adlc/settings-template.json` entries into `.claude/settings.json`. Guard `ask` prompts for risky commands remain by design |
 

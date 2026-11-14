@@ -9,6 +9,8 @@ const userIntent = require('../lib/userintent');
 const { entriesOverlap } = require('../lib/glob');
 
 const WORKER_ROLES = ['developer', 'developer-worktree', 'tester'];
+// Every plugin subagent changes files only through Write/Edit, where role scopes apply (the reviewer: not at all).
+const SUBAGENT_ROLES = [...WORKER_ROLES, 'reviewer', 'analyst', 'architect'];
 const WORKER_ADLC = ['worker', 'run', 'status'];
 const deny = (reason) => ({ decision: 'deny', reason });
 const ask = (reason) => ({ decision: 'ask', reason });
@@ -75,13 +77,15 @@ function decideBash(input, ctx, binding, level) {
   if (P.PROTECTED_IN_CMD.test(cmd) && P.WRITE_OPS.test(cmd)) {
     return deny('state.json, approvals.jsonl and runs/ are managed by the adlc CLI and hooks; use adlc commands (read state with `adlc status`)');
   }
+  if (P.removesLifecycleDir(cmd)) return deny('removing, moving or relinking .agent-lifecycle/ would switch the lifecycle off; the user can archive the change with /adlc:archive');
+  if (P.writesCliOwned(cmd)) return deny('evidence, handoffs, packets, reviews and traceability under .agent-lifecycle/ are written only by adlc commands (adlc run, adlc worker handoff, adlc review add, adlc trace)');
   if (P.MANAGED_NAME_IN_CMD.test(cmd) && P.WRITE_OPS.test(cmd)) {
     return ask(`this command may modify adlc-managed files (state.json, approvals.jsonl, runs/): \`${cmd}\`. Approve only if it targets a different file`);
   }
   for (const re of P.CHECK_BYPASS) if (re.test(cmd)) return deny('this command bypasses or masks checks (--no-verify, "|| true" after a check); run checks honestly and report failures');
-  if (WORKER_ROLES.includes(roleOf(input.agent_type))) {
+  if (SUBAGENT_ROLES.includes(roleOf(input.agent_type))) {
     const bad = P.shellWriteTargets(cmd).filter((x) => !P.SHELL_WRITE_OK(x));
-    if (bad.length) return deny(`workers change files only with the Write or Edit tools, so every write is attributed and scoped (shell writes are allowed only into .agent-lifecycle/tmp/); blocked: ${bad.join(', ')}`);
+    if (bad.length) return deny(`adlc subagents change files only with the Write or Edit tools, so every write is attributed and scoped (shell writes are allowed only into .agent-lifecycle/tmp/); blocked: ${bad.join(', ')}`);
   }
   if (binding) {
     if (/\bgit\b/.test(cmd)) return deny('workers never run git; the coordinator integrates your work');
@@ -92,8 +96,8 @@ function decideBash(input, ctx, binding, level) {
   if (P.USER_ONLY.test(cmd)) {
     // The user's own /adlc:<action> prompt (recorded by the UserPromptSubmit hook) is the approval: no second prompt.
     const m = cmd.match(P.USER_ONLY_ARG);
-    if (m && userIntent.pending(ctx.root, m[1], m[1] === 'unblock' ? null : m[2])) return null;
-    return deny(`only the user can run \`adlc ${m ? m[1] : 'approve|skip|unblock'}\`: ask them to type /adlc:${m ? m[1] : 'approve'}${m && m[2] ? ` ${m[2]}` : ''} themselves, then run it once. Do not try to get around this`);
+    if (m && userIntent.pending(ctx.root, m[1], ['unblock', 'archive'].includes(m[1]) ? null : m[2])) return null;
+    return deny(`only the user can run \`adlc ${m ? m[1] : 'approve|skip|unblock|archive'}\`: ask them to type /adlc:${m ? m[1] : 'approve'}${m && m[2] && !m[2].startsWith('-') ? ` ${m[2]}` : ''} themselves, then run it once. Do not try to get around this`);
   }
   const kind = P.riskyKind(cmd, level);
   if (kind) return ask(`${kind} requires your approval: \`${cmd}\``);

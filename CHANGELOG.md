@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+Fixes from the 2026-11-14 review. All covered by `npm test`; not yet live-tested in a session.
+
+### Changed (read before upgrading)
+- **No terminal shortcut for user-only commands.** `adlc approve`, `skip`, `unblock` and now `archive` always need your own slash command; a pseudo-terminal could pass as a person. New skill: `/adlc:archive [--force]`.
+- **An approval covers what you saw.** The intent stores the gate hash when you type `/adlc:approve`; if a covered file changes before the approval is recorded, the CLI refuses. `/adlc:approve` without a valid gate records nothing.
+- **Fewer approval gates need your own `/adlc:start`.** `adlc start --approval-gates none` (or any set smaller than `plan,release`) run by the model alone is refused.
+- **More of `.agent-lifecycle/` is protected.** The file tools and shell writes are denied for evidence, handoffs, packets, reviews, traceability, `handoff.md` and the archive. Only `requirements.md`, `plan.md`, `decisions.md`, `release.md` and `tmp/` stay editable. Commands that remove, move or relink the directory are denied.
+
+### Fixed
+- Hooks now find the active change the same way the CLI does. A session opened in a subdirectory of the repository was unguarded and could not record approvals.
+- The reviewer, analyst and architect could write files through the shell; they are now denied like workers.
+- A refused `approve`, `skip` or `unblock` no longer uses up your prompt.
+- The guard recognises a quoted subcommand (`adlc "approve" plan`) and matches protected paths case-insensitively.
+
 ## 0.4.0 — 2026-11-13
 
 Hardening from a review of the plugin, plus fixes from live runs.

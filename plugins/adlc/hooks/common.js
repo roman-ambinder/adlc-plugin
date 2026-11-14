@@ -2,7 +2,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { atomicWrite, readJson, withLock } = require('../lib/fsutil');
-const { linkedWorktree, mainRootFor } = require('../lib/worktree');
+const { linkedWorktree } = require('../lib/worktree');
+const { findStateRoot } = require('../lib/state');
 
 const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
 
@@ -37,14 +38,23 @@ function probeLog(input) {
   }
 }
 
+function startDirs(input) {
+  return [...new Set([process.env.CLAUDE_PROJECT_DIR, input.cwd, process.cwd()].filter(Boolean))].slice(0, 2);
+}
+
 // Returns null outside adlc projects so every hook stays silent there.
 function lifecycle(input) {
   probeLog(input);
-  // Hooks fired inside a worker's git worktree still use the main checkout's state.
-  const root = mainRootFor(process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd());
+  // Same lookup as the CLI (nearest ancestor with state, through linked worktrees), so a session opened in a
+  // subdirectory of the repository is still guarded.
+  let root = null;
+  for (const start of startDirs(input)) {
+    root = findStateRoot(start);
+    if (root) break;
+  }
+  if (!root) return null;
   const dir = path.join(root, '.agent-lifecycle');
   const stateFile = path.join(dir, 'state.json');
-  if (!fs.existsSync(stateFile)) return null;
   return { root, realRoot: real(root), dir, runs: path.join(dir, 'runs'), state: readJson(stateFile, null) };
 }
 
@@ -107,4 +117,4 @@ function updateBindings(ctx, fn) {
   }, { waitMs: 2000 });
 }
 
-module.exports = { WRITE_TOOLS, readStdin, lifecycle, emit, preToolDecision, roleOf, relPath, locate, workspaceOf, readBindings, updateBindings };
+module.exports = { WRITE_TOOLS, readStdin, startDirs, lifecycle, emit, preToolDecision, roleOf, relPath, locate, workspaceOf, readBindings, updateBindings };

@@ -37,17 +37,33 @@ function now() {
   return new Date().toISOString();
 }
 
+// The directory whose .agent-lifecycle/state.json governs `start`: ADLC_ROOT, else the nearest ancestor that has one.
+// Returns null when there is none. No git process, so hooks can call it on every tool use; the CLI and the hooks
+// share it, so they always agree on which change is active.
+function findStateRoot(start = process.cwd()) {
+  try {
+    if (process.env.ADLC_ROOT) {
+      const fixed = fs.realpathSync(path.resolve(process.env.ADLC_ROOT));
+      return fs.existsSync(path.join(fixed, DIR, 'state.json')) ? fixed : null;
+    }
+    // A worker in a linked git worktree uses the main checkout's state, never the worktree's committed copy.
+    let dir = fs.realpathSync(require('./worktree').mainRootFor(path.resolve(start)));
+    for (;;) {
+      if (fs.existsSync(path.join(dir, DIR, 'state.json'))) return dir;
+      const parent = path.dirname(dir);
+      if (parent === dir) return null;
+      dir = parent;
+    }
+  } catch {
+    return null;
+  }
+}
+
 function findRoot(start = process.cwd()) {
   if (process.env.ADLC_ROOT) return fs.realpathSync(path.resolve(process.env.ADLC_ROOT));
-  // A worker in a linked git worktree uses the main checkout's state, never the worktree's committed copy.
+  const found = findStateRoot(start);
+  if (found) return found;
   const begin = fs.realpathSync(require('./worktree').mainRootFor(path.resolve(start)));
-  let dir = begin;
-  for (;;) {
-    if (fs.existsSync(path.join(dir, DIR, 'state.json'))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
   const git = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: begin, encoding: 'utf8' });
   return git.status === 0 && git.stdout.trim() ? fs.realpathSync(git.stdout.trim()) : begin;
 }
@@ -184,5 +200,5 @@ function create(root, s) {
 }
 
 module.exports = {
-  SCHEMA, DIR, STAGES, DEFAULT_SERIAL_GLOBS, paths, now, findRoot, normalizeConfig, newState, init, exists, load, save, mutate, create,
+  SCHEMA, DIR, STAGES, DEFAULT_SERIAL_GLOBS, paths, now, findStateRoot, findRoot, normalizeConfig, newState, init, exists, load, save, mutate, create,
 };

@@ -33,8 +33,8 @@ test('user_config values reach the shell single-quoted', () => {
   assert.match(text, /'\$\{user_config\.approval_gates\}'/);
 });
 
-test('approve, skip and unblock are user-only; coordinator and worker-contract are model-only', () => {
-  for (const name of ['approve', 'skip', 'unblock']) assert.match(frontmatter(read(`skills/${name}/SKILL.md`)), /disable-model-invocation: true/, name);
+test('approve, skip, unblock and archive are user-only; coordinator and worker-contract are model-only', () => {
+  for (const name of ['approve', 'skip', 'unblock', 'archive']) assert.match(frontmatter(read(`skills/${name}/SKILL.md`)), /disable-model-invocation: true/, name);
   for (const name of ['coordinator', 'worker-contract']) assert.match(frontmatter(read(`skills/${name}/SKILL.md`)), /user-invocable: false/, name);
 });
 

@@ -17,12 +17,12 @@ function cleanEnv(extra = {}) {
   return { ...env, ...extra };
 }
 
-const USER_ONLY = ['approve', 'skip', 'unblock'];
+const USER_ONLY = ['approve', 'skip', 'unblock', 'archive'];
 
 // Plays the user: submits the prompt the user would type, which the UserPromptSubmit hook turns into an intent.
-function userPrompt(root, prompt) {
+function userPrompt(root, prompt, extraEnv = {}) {
   return spawnSync(process.execPath, [path.join(PLUGIN, 'hooks', 'prompt-submit.js')], {
-    input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt, session_id: 's-test' }), encoding: 'utf8', env: cleanEnv({ CLAUDE_PROJECT_DIR: root }),
+    input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt, session_id: 's-test' }), encoding: 'utf8', env: cleanEnv({ CLAUDE_PROJECT_DIR: root, ...extraEnv }),
   });
 }
 
