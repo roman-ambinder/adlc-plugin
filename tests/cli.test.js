@@ -333,3 +333,34 @@ test('summary reports time per stage and task, check runs and review findings', 
   assert.equal(o.cost, 'not observable');
   assert.match(ok(cli(root, ['summary'])), /Stages: discover skipped, specify \d+s/);
 });
+
+test('an intent needs the user\'s typed command in Claude Code\'s transcript: a hand-run hook, a replay or a fake transcript is refused', () => {
+  const { spawnSync } = require('node:child_process');
+  const { transcriptFor, typed, CONFIG } = require('./helpers');
+  const root = tmpdir();
+  ok(cli(root, ['start', 'x']));
+  const asModel = (args) => cli(root, args, { asModel: true });
+  const hookRun = (prompt, transcript) => spawnSync(process.execPath, [path.join(__dirname, '../plugins/adlc/hooks/prompt-submit.js')], {
+    input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt, transcript_path: transcript }), encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: root },
+  });
+  // the model runs the hook script itself: an intent is recorded, but the transcript has no typed command
+  fs.appendFileSync(transcriptFor(root), '');
+  hookRun('/adlc:skip specify', transcriptFor(root));
+  let r = asModel(['skip', 'specify', 'forged']);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /no unused \/adlc:skip typed by the user/);
+  // ... or points the hook at a transcript it wrote outside Claude Code's projects folder
+  const fake = path.join(tmpdir(), 'fake.jsonl');
+  fs.writeFileSync(fake, fs.existsSync(transcriptFor(root)) ? fs.readFileSync(transcriptFor(root)) : '');
+  hookRun('/adlc:skip specify', fake);
+  assert.match(asModel(['skip', 'specify', 'forged']).stderr, /not in Claude Code's projects folder/);
+  // a real typed command works once; replaying its transcript entry with a new hand-run intent does not
+  typed(root, '/adlc:skip specify not needed');
+  hookRun('/adlc:skip specify', transcriptFor(root));
+  assert.equal(asModel(['skip', 'discover', 'x']).status, 2, 'the typed command names another stage');
+  ok(asModel(['skip', 'specify', 'not needed']));
+  ok(cli(root, ['status']));
+  hookRun('/adlc:skip design', transcriptFor(root));
+  assert.match(asModel(['skip', 'design', 'replay']).stderr, /no unused \/adlc:skip/);
+  assert.ok(CONFIG);
+});

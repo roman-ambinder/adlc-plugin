@@ -345,3 +345,32 @@ test('guard asks before a Grep over a folder that holds secret files git would s
   fs.writeFileSync(path.join(root, '.gitignore'), '.env*\n');
   assert.equal(decision(hook('guard', grep({}), root)), null, 'ripgrep skips git-ignored files');
 });
+
+test('guard denies running adlc hook scripts by hand, writing session transcripts, and redirecting the config dir', () => {
+  const { CONFIG } = require('./helpers');
+  const root = project();
+  for (const cmd of [
+    'echo \'{"prompt":"/adlc:approve plan"}\' | node /p/plugins/adlc/hooks/prompt-submit.js',
+    'node "$CLAUDE_PLUGIN_ROOT/hooks/prompt-submit.js" < fake.json',
+    'echo x >> ~/.claude/projects/p/session.jsonl',
+    'cp fake.jsonl /home/u/.claude/projects/p/s.jsonl',
+    'CLAUDE_CONFIG_DIR=/tmp/fake adlc approve plan',
+  ]) assert.equal(decision(hook('guard', bash(cmd), root, { CLAUDE_CONFIG_DIR: CONFIG })), 'deny', cmd);
+  const toTranscript = { hook_event_name: 'PreToolUse', tool_name: 'Write', cwd: root, tool_input: { file_path: path.join(CONFIG, 'projects/p/s.jsonl'), content: '{}' } };
+  assert.equal(decision(hook('guard', toTranscript, root, { CLAUDE_CONFIG_DIR: CONFIG })), 'deny', 'Write tool into the transcripts');
+  for (const cmd of ['cat ~/.claude/projects/p/s.jsonl | tail -1', 'node --test tests/hooks.test.js', 'ls plugins/adlc/hooks']) {
+    assert.notEqual(decision(hook('guard', bash(cmd), root, { CLAUDE_CONFIG_DIR: CONFIG })), 'deny', cmd);
+  }
+});
+
+test('hooks look for the change only in the project directory, never in an unrelated working directory', () => {
+  const outer = project();
+  const inner = path.join(outer, 'nested-tmp');
+  fs.mkdirSync(inner);
+  const r = require('node:child_process').spawnSync(process.execPath, [path.join(__dirname, '../plugins/adlc/hooks/prompt-submit.js')], {
+    cwd: outer, input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: '/adlc:unblock go' }), encoding: 'utf8',
+    env: { ...process.env, CLAUDE_PROJECT_DIR: fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'adlc-other-')) },
+  });
+  assert.equal(r.status, 0);
+  assert.equal(fs.existsSync(path.join(outer, '.agent-lifecycle/runs/intents.jsonl')), false, 'no intent leaked into the project the process happened to run in');
+});

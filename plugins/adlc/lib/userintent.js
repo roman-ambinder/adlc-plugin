@@ -3,6 +3,8 @@
 // The UserPromptSubmit hook sees only prompts the user submits and records an intent here (hooks/prompt-submit.js).
 // The CLI needs one matching, unexpired, unused intent per action. There is no terminal shortcut: a pseudo-terminal
 // (`script -c ...`) is indistinguishable from a person, so a person at a terminal types the slash command too.
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { paths, normalizeConfig } = require('./state');
@@ -43,9 +45,10 @@ function parsePrompt(prompt, env = process.env) {
   return key && key !== FULL_GATES ? { action, arg: key } : null;
 }
 
-function record(root, { action, arg = null, session, hash }) {
+function record(root, { action, arg = null, session, hash, transcript }) {
   const rec = { type: 'intent', id: crypto.randomBytes(6).toString('hex'), action, arg, session: session || null, ts: new Date().toISOString() };
   if (hash) rec.hash = hash;
+  if (transcript) rec.transcript = String(transcript);
   appendLine(file(root), rec);
   return rec;
 }
@@ -57,19 +60,68 @@ function pending(root, action, arg = null, nowMs = Date.now()) {
   return lines.filter((l) => l.type === 'intent' && l.action === action && !used.has(l.id) && nowMs - Date.parse(l.ts) <= TTL_MS && (l.arg === undefined ? null : l.arg) === want).pop() || null;
 }
 
-// Returns the user's matching intent or throws. The caller validates the action, performs it, then calls consume().
-function find(root, action, arg = null, hint = '') {
-  const found = pending(root, action, arg);
-  if (!found) {
-    const what = `${action}${arg && action !== 'start' ? ` ${arg}` : ''}`;
-    throw rule(`the user has not asked for this: only the user can run \`adlc ${what}\`${hint ? ` ${hint}` : ''}. Ask them to type /adlc:${what} themselves, then run it once`);
+// Claude Code keeps each session's transcript under <config dir>/projects/. Only Claude Code writes it, and a slash
+// command the user typed appears there as a user entry with <command-name>/adlc:<action></command-name>.
+const projectsDir = (env = process.env) => path.join(env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'projects');
+const realOrNull = (p) => {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return null;
   }
-  return found;
+};
+
+// The transcript entry that proves the user typed this command, not yet used by an earlier action. An intent recorded by
+// running the hook script by hand (rather than by Claude Code on a real prompt) has no such entry.
+function proof(intent, action, arg, usedEntries) {
+  if (!intent.transcript) return { problem: 'no session transcript was recorded with the prompt' };
+  const dir = realOrNull(projectsDir());
+  const file = realOrNull(intent.transcript);
+  if (!dir || !file || !file.startsWith(dir + path.sep)) return { problem: "the recorded session transcript is not in Claude Code's projects folder" };
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return { problem: 'the session transcript cannot be read' };
+  }
+  const tag = `<command-name>/adlc:${action}</command-name>`;
+  const since = Date.parse(intent.ts) - 2 * 60 * 1000;
+  let found = null;
+  for (const line of text.split('\n')) {
+    if (!line.includes(tag)) continue;
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const c = e && e.message && e.message.content;
+    const body = typeof c === 'string' ? c : Array.isArray(c) ? c.map((x) => (x && typeof x.text === 'string' ? x.text : '')).join('\n') : '';
+    if (e.type !== 'user' || e.isMeta || !body.includes(tag) || !(Date.parse(e.timestamp) >= since)) continue;
+    const first = ((/<command-args>([\s\S]*?)<\/command-args>/.exec(body) || [])[1] || '').trim().split(/\s+/)[0] || null;
+    if (arg && action !== 'start' && first !== arg) continue;
+    const id = e.uuid || `${file}@${e.timestamp}`;
+    if (!usedEntries.has(id)) found = id;
+  }
+  return found ? { entry: found } : { problem: `the session transcript has no unused /adlc:${action} typed by the user` };
 }
 
-// One request authorises one command.
+// Returns the user's matching intent, with its transcript proof, or throws. The caller validates the action, performs it,
+// then calls consume().
+function find(root, action, arg = null, hint = '') {
+  const what = `${action}${arg && action !== 'start' ? ` ${arg}` : ''}`;
+  const refuse = (why) => rule(`the user has not asked for this: only the user can run \`adlc ${what}\`${hint ? ` ${hint}` : ''}${why ? ` (${why})` : ''}. Ask them to type /adlc:${what} themselves, then run it once`);
+  const found = pending(root, action, arg);
+  if (!found) throw refuse('');
+  const used = new Set(readJsonLines(file(root)).filter((l) => l.type === 'consumed' && l.entry).map((l) => l.entry));
+  const p = proof(found, action, arg, used);
+  if (p.problem) throw refuse(p.problem);
+  return { ...found, entry: p.entry };
+}
+
+// One request authorises one command; the transcript entry that proved it cannot be used again.
 function consume(root, intent) {
-  appendLine(file(root), { type: 'consumed', id: intent.id, ts: new Date().toISOString() });
+  appendLine(file(root), { type: 'consumed', id: intent.id, entry: intent.entry || null, ts: new Date().toISOString() });
 }
 
-module.exports = { TTL_MS, ACTIONS, GATES, FULL_GATES, gatesKey, parsePrompt, record, pending, find, consume };
+module.exports = { projectsDir, proof, TTL_MS, ACTIONS, GATES, FULL_GATES, gatesKey, parsePrompt, record, pending, find, consume };

@@ -3,6 +3,7 @@
 // UserPromptSubmit: only text the user submits reaches this hook, never model-generated commands.
 // A user-typed /adlc:approve, /adlc:skip, /adlc:unblock or /adlc:archive leaves an intent the CLI requires before it acts.
 // An approval intent carries the hash of what the user was looking at, so edits made after the prompt are not approved.
+// The CLI later checks the session transcript, which only Claude Code writes, for the user's own typed command.
 // /adlc:start leaves one only when the user's prompt or plugin setting reduces the approval gates.
 const { readStdin, lifecycle, startDirs, noteSession } = require('./common');
 const { parsePrompt, record } = require('../lib/userintent');
@@ -27,7 +28,7 @@ function main() {
         hash = undefined; // the CLI refuses an approval whose intent has no hash
       }
     }
-    record(root, { ...parsed, session: input.session_id, hash });
+    record(root, { ...parsed, session: input.session_id, hash, transcript: input.transcript_path });
   } catch (err) {
     process.stderr.write(`adlc prompt-submit: ${err.message}\n`);
   }
