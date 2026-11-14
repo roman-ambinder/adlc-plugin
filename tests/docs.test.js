@@ -69,3 +69,11 @@ test('README shows the demo recording, labelled as scripted', () => {
   assert.match(readme, /scripted/i);
   assert.ok(fs.statSync(path.join(REPO, 'docs', 'media', 'demo.svg')).size < 5 * 1024 * 1024);
 });
+
+// Final review: safety wording must not overstate (spec anti-goal).
+test('docs do not overstate what user-only and the guard enforce', () => {
+  const readme = read('README.md');
+  assert.doesNotMatch(readme, /the model cannot start them on its own\./);
+  assert.match(readme, /`\/adlc:setup` is different/);
+  assert.match(read('docs/installation.md'), /while a change is active/);
+});

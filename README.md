@@ -94,7 +94,7 @@ Tip: run `/clear` (or open a new session) between stages. adlc saves its progres
 | `/adlc:cancel <reason>` | **User-only.** Stop an unfinished change: active workers' leases end, the reason is recorded, and the change is archived. Code already written stays for you to keep or discard |
 | `/adlc:archive [--force]` | **User-only.** Move the change to `.agent-lifecycle/archive/` so a new one can start. `--force` archives a change that is not done |
 
-Commands marked **user-only** run only when you type them; the model cannot start them on its own.
+Commands marked **user-only** run only when you type them. For approve, skip, unblock, cancel and archive the `adlc` CLI also refuses unless you typed the slash command yourself. `/adlc:setup` is different: the model cannot start the skill, but it could run `adlc setup` directly, behind a normal permission prompt; setup only adds rules and never removes yours.
 
 ## Learn more
 

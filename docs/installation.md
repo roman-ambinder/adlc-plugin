@@ -59,6 +59,6 @@ After changing plugin files, run `/reload-plugins` or start a new session.
 **Recommended project permissions:** run `/adlc:setup` in your project. It shows what it will add to `.claude/settings.json` and `.gitignore`, asks you, and never removes your own settings. A plugin cannot ship permission rules itself. You can also copy the entries from [`plugins/adlc/settings-template.json`](https://github.com/roman-ambinder/adlc-plugin/blob/main/plugins/adlc/settings-template.json) by hand. The template:
 - allows the routine `adlc` subcommands without a prompt;
 - keeps commits, pushes, PRs, installs and publishing on `ask`;
-- denies the Read tool on `.env`, keys and similar files (the guard hook also blocks them in Bash commands and Read calls).
+- denies the Read tool on `.env`, keys and similar files (while a change is active, the guard hook also blocks them in Bash commands and Read calls).
 
 `approve`, `skip`, `unblock`, `archive`, `cancel` and `lease` are deliberately left out of the allow list; your own slash command is what authorises the first five.

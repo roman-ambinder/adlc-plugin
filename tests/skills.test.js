@@ -101,3 +101,8 @@ test('the reviewer has the report format in its own instructions', () => {
 test('start tells the model to run the command even when plugin options are unfilled', () => {
   assert.match(read('skills/start/SKILL.md'), /run it exactly as written[^\n]*ignores/i);
 });
+
+// Final review: an added ask/deny entry can override a broader allow rule of the user's; the user must be told.
+test('setup skill warns that added ask or deny rules can override broader allow rules', () => {
+  assert.match(read('skills/setup/SKILL.md'), /broader allow rule/);
+});

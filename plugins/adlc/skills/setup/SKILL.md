@@ -18,6 +18,7 @@ CLI fallback if `adlc` is not on PATH: `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`. 
    - `would add` lines are the permissions and the `.gitignore` entry that will be added. Existing settings are kept; nothing is removed.
    - `skipped` lines are rules the user already set differently; they stay as the user set them.
    - `note` lines need no action now.
+   - Tell the user: an added `ask` or `deny` rule wins over a broader allow rule they already have (for example their `Bash(git *)` allow and the added `Bash(git commit *)` ask), so those commands will prompt from now on. Their own rules are not changed.
 
    Ask the user whether to apply these changes. Stop if they say no.
 4. If they say yes, run:
