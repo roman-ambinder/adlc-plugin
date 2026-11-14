@@ -34,8 +34,13 @@ Status as of version 0.4.0 (Slices 1–3 plus the 2026-11-13 review follow-up), 
 | Starting with fewer gates than `plan,release` needs the user's own `/adlc:start` | `lib/userintent.js`, `lib/cli.js` | `tests/cli.test.js` |
 | Hooks find the change the same way the CLI does (nearest parent directory with state), so a session opened in a subdirectory is guarded | `lib/state.js`, `hooks/common.js` | `tests/cli.test.js` |
 | The reviewer, analyst and architect are denied shell writes, like workers | `hooks/guard.js` | `tests/hooks.test.js` |
+| Verify needs every approved task check to pass in the verify stage | `lib/rules.js` | `tests/workflow.test.js` |
+| Review findings are counted from the report (`[B<n>]`, `[O<n>]`); flags that disagree are refused | `lib/rules.js`, `lib/cli.js` | `tests/workflow.test.js`, `tests/cli.test.js` |
+| The release gate hash covers the code through a git tree id of the working tree (throwaway index; `no-git` outside a repository) | `lib/worktree.js`, `lib/gates.js` | `tests/cli.test.js` |
+| The Grep tool is guarded for secret files; `.envrc`, `.npmrc`, `.netrc`, `.pypirc`, `.aws/credentials`, `*.p12`, `*.pfx` are covered | `hooks/patterns.js`, `hooks/hooks.json` | `tests/hooks.test.js` |
+| `adlc lease stopped` needs the worker's handoff from that dispatch; the task budget resets only for the session the hooks last recorded | `lib/dispatch.js`, `hooks/common.js` | `tests/workflow.test.js`, `tests/cli.test.js` |
 
-Still open from that review: verify accepts any passing command; review counts are reported by the coordinator; the release hash does not cover code; the Grep tool is not guarded for secret files; `adlc lease stopped` and the `--session` budget reset are not user-only. Shell indirection (scripts, variables) remains best-effort, as before.
+Known limits of these: a Grep over a whole directory can still match text inside a secret file; the coordinator still passes the reviewer's report to the CLI, so the report's wording is trusted; outside git the release hash does not cover code. Shell indirection (scripts, variables) remains best-effort, as before.
 
 ## Live smoke test (2026-11-13, Claude Code 2.1.311, `claude -p --plugin-dir`, Sonnet)
 

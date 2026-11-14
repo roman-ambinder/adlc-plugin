@@ -66,7 +66,10 @@ function decideWrite(input, ctx, binding) {
 }
 
 function decideRead(input) {
-  const target = (input.tool_input || {}).file_path;
+  const ti = input.tool_input || {};
+  // Read names a file; Grep names a file or directory in `path` and may select files with `glob`.
+  const target = ti.file_path || ti.path;
+  if (ti.glob && P.secretGlob(ti.glob)) return deny(`the pattern ${ti.glob} selects files that may hold secrets; ask the user to provide the values you need`);
   if (target && P.SECRET_FILE.test(String(target))) return deny(`${target} may hold secrets; ask the user to provide the values you need`);
   return null;
 }
@@ -108,7 +111,7 @@ function decide(input, ctx, env = process.env) {
   const level = env.CLAUDE_PLUGIN_OPTION_GUARD_LEVEL === 'standard' ? 'standard' : 'strict';
   const binding = input.agent_id ? readBindings(ctx)[input.agent_id] || null : null;
   if (WRITE_TOOLS.includes(input.tool_name)) return decideWrite(input, ctx, binding);
-  if (input.tool_name === 'Read') return decideRead(input);
+  if (input.tool_name === 'Read' || input.tool_name === 'Grep') return decideRead(input);
   if (input.tool_name === 'Bash') return decideBash(input, ctx, binding, level);
   return null;
 }

@@ -30,7 +30,7 @@ hooks: SessionStart (status) · UserPromptSubmit (user intent) · PreToolUse (gu
   - deny edits to everything the CLI writes under `.agent-lifecycle/` (state, approvals, evidence, handoffs, packets, reviews, traceability), and commands that remove or move that directory;
   - deny edits that skip tests;
   - deny commands that mask a check's exit status (`|| true`, `; exit 0`, `set +e`), and `adlc run` refuses to record them;
-  - deny reading `.env`, keys and certificates through Bash or the Read tool;
+  - deny reading `.env`, keys, certificates and credential files (`.npmrc`, `.netrc`, `.aws/credentials`, …) through Bash, Read or Grep;
   - deny writes outside a role's or task's scope;
   - ask before commits, pushes, PRs, installs, network access, destructive commands, publishing and deploying.
 
@@ -121,7 +121,7 @@ After changing plugin files, run `/reload-plugins` or start a new session.
 | `/adlc:approve plan\|release [note]` | **User-only.** Records your approval, tied to a hash of everything it covers |
 | `/adlc:next` | Run the next approved stage: build, verify, review or release |
 | `/adlc:status` | Stage, gates, tasks, blockers, budget, next step |
-| `/adlc:verify` | Run the repository's tests, format check, lint, type check and security checks through `adlc run` |
+| `/adlc:verify` | Run the approved task checks and the repository's tests, format check, lint, type check and security checks through `adlc run` |
 | `/adlc:review` | Independent review by the reviewer agent; blocking findings reopen build |
 | `/adlc:resume` | Rebuild context in a new session and recover workers from the previous session |
 | `/adlc:release` | Traceability, release notes (changes, migration, deployment, rollback), then complete after approval |
@@ -179,7 +179,7 @@ Workers never commit. When a task passes `adlc integrate check`, the CLI prints 
 | `packets/T<n>.md` | yes | CLI | Execution-ready build packet per task |
 | `handoffs/T<n>.json` | yes | worker (validated by CLI) | Structured worker handoff |
 | `test-results/*.md` | yes | `adlc run` only | Command, exit code, duration, redacted output (last 200 lines) |
-| `reviews/*.md` | yes | CLI from the reviewer's report | Blocking and optional findings |
+| `reviews/*.md` | yes | CLI from the reviewer's report | Blocking and optional findings (counted by the CLI from `[B<n>]` / `[O<n>]` items) |
 | `approvals.jsonl` | yes | CLI only (append) | Approvals, skips, unblocks |
 | `traceability.md` | yes | `adlc trace` | AC → tasks → passing evidence |
 | `handoff.md` | yes | `adlc handoff` (append) | Session notes for resuming |
@@ -197,7 +197,7 @@ Workers never commit. When a task passes `adlc integrate check`, the CLI prints 
 
 - **Untrusted input.** Agent prompts and coordinator rules treat repository files, tool output and subagent reports as data. The SessionStart hook injects only structured, sanitised fields.
 - **Approvals.**
-  - Gate approvals hash the covered artifacts, so changing scope makes an approval stale.
+  - Gate approvals hash the covered artifacts, so changing scope makes an approval stale. The release approval also covers the code (a git tree id of the working tree), so a file changed after approval makes it stale; committing unchanged content does not.
   - Approve, skip and unblock skills use `disable-model-invocation: true`, so only you can start them.
   - The CLI refuses `adlc approve`, `skip`, `unblock` and `archive` unless you typed the matching slash command yourself. A `UserPromptSubmit` hook records each of your slash commands as a single-use intent that expires after 15 minutes; a command the model runs on its own, or after you only asked in prose, is refused. There is no terminal shortcut: at a terminal, type the slash command in Claude Code too. The guard denies such commands early with the same explanation. Intents live in `.agent-lifecycle/runs/`, which hooks and the guard protect.
   - An approval intent stores the gate hash from the moment you typed `/adlc:approve`. If a covered file changes before the approval is recorded, the CLI refuses and you approve again.
@@ -209,6 +209,9 @@ Workers never commit. When a task passes `adlc integrate check`, the CLI prints 
   - A worker that has claimed a task may write only that task's files, and may not run git or state-changing `adlc` commands.
 - **Honesty.**
   - Evidence comes only from executed commands.
+  - Verify completes only when every task check from the approved plan has passed in that stage.
+  - Review findings are counted from the reviewer's report, not reported by the coordinator.
+  - A lease can be confirmed stopped only with the worker's handoff; the task budget resets only in a session the hooks recorded.
   - `integrate check` rejects claimed checks without matching evidence, and changed files outside the task.
   - Edits that add `.skip`/`.only`, and `--no-verify` or `|| true` after checks, are denied.
 - **Limits.**
@@ -258,6 +261,9 @@ npm run validate
 | `plan gate not approved` / `approval is stale` | Review the files, then run `/adlc:approve plan` again. Any edit to the covered files (requirements, plan, decisions) or to the tasks, contracts or execution plan after approval needs a new approval. Packets are rendered from the tasks, so they are covered through them; a hand edit to a packet is overwritten at the next dispatch |
 | `state changed concurrently` (exit 3) | Another adlc process wrote state. Re-run the command |
 | `no SubagentStop record for L-…` | The worker may still be running. Once it has returned, inspect its changes and run `adlc lease stopped <L> "<note>"` |
+| `approved task check … has not been run in this verify stage` | Run it with `adlc run --stage verify -- "<check>"`, using the exact text from the plan |
+| `cannot count the findings` | The review report must keep the template headings, with `- [B<n>]` items or "None." under Blocking findings |
+| `release approval is stale` right after approving | A project file changed after you approved. Review it and run `/adlc:approve release` again |
 | Task blocked after repeated failures | Read its evidence and handoff, decide the approach, then `/adlc:unblock "<note>" --task T<n>` |
 | Hooks seem inactive | Hooks act when `.agent-lifecycle/state.json` exists in the project directory or a parent of it (the same lookup as the CLI). Check `/plugin` → Errors, and `claude --debug` |
 | Need to see what hooks receive | Start Claude Code with `ADLC_HOOK_LOG=/tmp/adlc-hooks.jsonl` to log hook metadata (never tool input) |

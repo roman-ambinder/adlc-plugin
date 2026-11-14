@@ -30,7 +30,7 @@ const HELP = `usage: adlc <command> [args]
   contract add --file <json>    packet render [T]    exec plan
   gate check <plan|release>     hash <plan|release>  approve <plan|release> [--note text]   (approve: user-only)
   run --stage <stage> [--task T] [--exclusive] -- <command...>
-  review add --file <md> --blocking N --optional N    trace
+  review add --file <md> [--blocking N --optional N]  (counts are read from the report)    trace
   dispatch check <T>   dispatch ready [--json]   dispatch start <T> [--session id]
   worker claim <T> --lease <L>   worker handoff <T> --file <json>
   integrate check <T>  integrate done <T>
@@ -347,12 +347,16 @@ const handlers = {
   },
 
   review({ root, pos, flags }) {
-    if (pos[1] !== 'add') throw usage('usage: adlc review add --file <md> --blocking N --optional N');
+    if (pos[1] !== 'add') throw usage('usage: adlc review add --file <md>');
     const src = need(flags.file, '--file <md> is required');
-    const blocking = Number(need(flags.blocking, '--blocking N is required'));
-    const optional = Number(need(flags.optional, '--optional N is required'));
-    if (!Number.isInteger(blocking) || blocking < 0 || !Number.isInteger(optional) || optional < 0) throw usage('--blocking and --optional must be non-negative integers');
     const body = fs.readFileSync(src, 'utf8');
+    // The counts come from the report itself; the optional flags only cross-check them.
+    const counted = rules.reviewCounts(body);
+    if (counted.problems.length) throw rule(`cannot count the findings in ${src}:\n- ${counted.problems.join('\n- ')}\nAsk the reviewer for a report in the templates/review.md format; do not rewrite it yourself`);
+    const { blocking, optional } = counted;
+    for (const [flag, n] of [['blocking', blocking], ['optional', optional]]) {
+      if (flags[flag] !== undefined && Number(flags[flag]) !== n) throw rule(`--${flag} ${flags[flag]} does not match the report, which lists ${n} ${flag} finding(s)`);
+    }
     return st.mutate(root, (s) => {
       if (s.stages.review.status !== 'in_progress') throw rule('reviews can be recorded only while the review stage is in progress');
       const ts = st.now();
@@ -446,7 +450,7 @@ const handlers = {
     const sub = pos[1];
     const leaseId = need(pos[2], 'usage: adlc lease stopped|lost <L> <note>');
     const note = pos.slice(3).join(' ');
-    if (sub === 'stopped') return st.mutate(root, (s) => ({ obj: dispatch.confirmStopped(s, leaseId, note), text: `${leaseId} confirmed stopped` }));
+    if (sub === 'stopped') return st.mutate(root, (s) => ({ obj: dispatch.confirmStopped(root, s, leaseId, note), text: `${leaseId} confirmed stopped` }));
     if (sub === 'lost') return st.mutate(root, (s) => ({ text: `${leaseId} lost; task is now ${dispatch.markLost(s, leaseId, note)}` }));
     throw usage('usage: adlc lease stopped|lost <L> <note>');
   },

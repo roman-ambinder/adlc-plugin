@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 // SessionStart: injects a short status built from structured state fields only (never free text from files).
-const { readStdin, lifecycle, emit } = require('./common');
+const { readStdin, lifecycle, emit, noteSession } = require('./common');
 
 const STAGES = ['discover', 'specify', 'plan', 'design', 'build', 'verify', 'review', 'release'];
 const safe = (v, n = 80) => String(v === undefined || v === null ? '' : v).replace(/[^\w .:/@+-]/g, ' ').slice(0, n);
@@ -26,6 +26,7 @@ function main() {
   const input = readStdin();
   const ctx = lifecycle(input);
   if (!ctx) return;
+  noteSession(ctx, input);
   const text = ctx.state && ctx.state.schema === 1
     ? context(ctx.state)
     : 'adlc: .agent-lifecycle/state.json exists but could not be read as schema 1; run `adlc status` to see the error.';

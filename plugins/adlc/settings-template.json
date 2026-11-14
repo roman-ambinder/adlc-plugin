@@ -14,7 +14,7 @@
     "deny": [
       "Edit(./.agent-lifecycle/state.json)", "Edit(./.agent-lifecycle/approvals.jsonl)", "Edit(./.agent-lifecycle/runs/**)",
       "Edit(./.agent-lifecycle/test-results/**)", "Edit(./.agent-lifecycle/handoffs/**)", "Edit(./.agent-lifecycle/reviews/**)",
-      "Read(./.env)", "Read(./.env.*)", "Read(./**/*.pem)", "Read(./**/*.key)", "Read(./**/id_rsa*)"
+      "Read(./.env)", "Read(./.env.*)", "Read(./.envrc)", "Read(./.npmrc)", "Read(./**/*.p12)", "Read(./**/*.pfx)", "Read(./**/*.pem)", "Read(./**/*.key)", "Read(./**/id_rsa*)"
     ]
   }
 }

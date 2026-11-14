@@ -32,8 +32,10 @@ const ADLC_SUBCOMMAND = new RegExp(`${ADLC}([a-z-]+)`, 'g');
 const WORKER_CLAIM = new RegExp(`${ADLC}worker\\s+claim\\s+['"]?(T\\d+)['"]?\\s+--lease\\s+['"]?(L-[0-9a-f]+)`);
 
 // Secret-bearing files (the settings template denies the same set for the Read tool).
-const SECRET_FILE = /(^|\/)(\.env(\.(?!example\b|sample\b|template\b|dist\b)[\w.-]+)?|[^\/\s'"]+\.(pem|key)|id_(rsa|dsa|ecdsa|ed25519)[\w.-]*)$/;
-const SECRET_IN_CMD = /(^|[\s'"=<\/])(\.env(\.(?!example\b|sample\b|template\b|dist\b)[\w.-]+)?|[^\s'"\/]+\.(pem|key)|id_(rsa|dsa|ecdsa|ed25519)[\w.-]*)(?=$|[\s'";&|)])/;
+const SECRET_FILE = /(^|\/)(\.env(\.(?!example\b|sample\b|template\b|dist\b)[\w.-]+)?|\.envrc|\.npmrc|\.netrc|\.pypirc|\.aws\/credentials|[^\/\s'"]+\.(pem|key|p12|pfx)|id_(rsa|dsa|ecdsa|ed25519)[\w.-]*)$/;
+const SECRET_IN_CMD = /(^|[\s'"=<\/])(\.env(\.(?!example\b|sample\b|template\b|dist\b)[\w.-]+)?|\.envrc|\.npmrc|\.netrc|\.pypirc|\.aws\/credentials|[^\s'"\/]+\.(pem|key|p12|pfx)|id_(rsa|dsa|ecdsa|ed25519)[\w.-]*)(?=$|[\s'";&|)])/;
+// A Grep glob such as ".env*" or "*.pem" that selects secret files.
+const secretGlob = (glob) => [String(glob).replace(/[*?]/g, ''), String(glob).replace(/\*+|\?/g, 'x')].some((g) => SECRET_FILE.test(g));
 const READ_VERBS = /(^|[\s;&|(])(cat|less|more|head|tail|grep|egrep|rg|ag|sed|awk|cp|source|\.|xxd|od|strings|base64|bat|nl|tac|sort|diff|cut|tr|openssl)\s/;
 
 // Inline interpreter code (`python -c`, `node -e`, ...) can write any file without a visible target.
@@ -90,4 +92,4 @@ function riskyKind(cmd, level = 'strict') {
   return null;
 }
 
-module.exports = { writesCliOwned, removesLifecycleDir, USER_ONLY_ARG, countTests, SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
+module.exports = { secretGlob, writesCliOwned, removesLifecycleDir, USER_ONLY_ARG, countTests, SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };

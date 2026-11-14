@@ -1,4 +1,4 @@
-{"type":"skip","change":"chg-20261113-add-slugify-utility","stage":"discover","reason":"small change","actor":"user","ts":"2026-11-13T20:29:47.405Z"}
-{"type":"skip","change":"chg-20261113-add-slugify-utility","stage":"design","reason":"small change","actor":"user","ts":"2026-11-13T20:29:47.410Z"}
-{"type":"approval","gate":"plan","change":"chg-20261113-add-slugify-utility","hash":"c5fa3d37c87867f4037193b63b0b90b057595ee24cc0dc98a8de7720cf46d241","actor":"user","note":"e2e: user reviewed requirements, plan and packet","ts":"2026-11-13T20:29:49.514Z"}
-{"type":"approval","gate":"release","change":"chg-20261113-add-slugify-utility","hash":"dfaf608c1d903b8737e79191b925cd4720b6fc9cb74c7a28cee0bfc30db5d149","actor":"user","note":"e2e: user reviewed release notes","ts":"2026-11-13T20:29:56.171Z"}
+{"type":"skip","change":"chg-20261114-add-slugify-utility","stage":"discover","reason":"small change","actor":"user","ts":"2026-11-14T11:24:53.978Z"}
+{"type":"skip","change":"chg-20261114-add-slugify-utility","stage":"design","reason":"small change","actor":"user","ts":"2026-11-14T11:24:53.979Z"}
+{"type":"approval","gate":"plan","change":"chg-20261114-add-slugify-utility","hash":"c5fa3d37c87867f4037193b63b0b90b057595ee24cc0dc98a8de7720cf46d241","actor":"user","note":"e2e: user reviewed requirements, plan and packet","ts":"2026-11-14T11:24:54.445Z"}
+{"type":"approval","gate":"release","change":"chg-20261114-add-slugify-utility","hash":"5d504c5165fa031e4ea56617bc7692af284eae316d1db566e997289960c84a4c","actor":"user","note":"e2e: user reviewed release notes","ts":"2026-11-14T11:24:56.290Z"}

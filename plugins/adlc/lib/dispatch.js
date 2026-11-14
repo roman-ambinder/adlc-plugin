@@ -1,5 +1,6 @@
 'use strict';
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 const path = require('node:path');
 const { paths, now } = require('./state');
 const { readJsonLines } = require('./fsutil');
@@ -86,8 +87,15 @@ function readyToDispatch(root, s) {
   return picked;
 }
 
+// The session the hooks saw most recently (SessionStart and UserPromptSubmit record it in runs/sessions.jsonl).
+function currentSession(root) {
+  const last = readJsonLines(path.join(paths(root).runs, 'sessions.jsonl')).pop();
+  return last ? last.session : null;
+}
+
 function startDispatch(root, s, id, { session = 'unknown' } = {}) {
-  if (s.budget.session !== session) {
+  // The budget starts again only in a session the hooks recorded, so an invented --session value cannot reset it.
+  if (s.budget.session !== session && session === currentSession(root)) {
     s.budget.session = session;
     s.budget.tasks_this_run = 0;
   }
@@ -115,9 +123,18 @@ function requireNote(note, example) {
 }
 
 // Coordinator confirms, after inspection, that a worker without a SubagentStop record has stopped.
-function confirmStopped(s, leaseId, note) {
+// It needs the worker's handoff from this dispatch: a worker that has not handed off may still be running, and the
+// coordinator's word alone is not enough to integrate its files. Without a handoff the lease is lost, not stopped.
+function confirmStopped(root, s, leaseId, note) {
   const lease = findLease(s, leaseId);
   if (lease.status !== 'active') throw rule(`lease ${leaseId} is ${lease.status}, not active`);
+  let handedOff = false;
+  try {
+    handedOff = fs.statSync(path.join(paths(root).handoffs, `${lease.task}.json`)).mtimeMs >= Date.parse(lease.started) - 1000;
+  } catch {
+    handedOff = false;
+  }
+  if (!handedOff) throw rule(`${lease.task} has no handoff from this dispatch, so ${leaseId} cannot be confirmed stopped. If the worker is gone, run \`adlc lease lost ${leaseId} "<what you inspected>"\` (the attempt counts and the task is dispatched again)`);
   lease.stop_confirmed = { note: requireNote(note, `adlc lease stopped ${leaseId} "foreground worker returned"`), ts: now() };
   return lease;
 }
@@ -134,5 +151,5 @@ function markLost(s, leaseId, note) {
 }
 
 module.exports = {
-  activeLeases, effectiveMax, stops, hasStopped, leaseFor, endLease, checkDispatch, readyToDispatch, startDispatch, confirmStopped, markLost,
+  currentSession, activeLeases, effectiveMax, stops, hasStopped, leaseFor, endLease, checkDispatch, readyToDispatch, startDispatch, confirmStopped, markLost,
 };

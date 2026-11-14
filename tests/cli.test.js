@@ -240,3 +240,57 @@ test('hooks and the CLI agree on the root when the session starts in a subdirect
   assert.equal(p.status, 0);
   assert.ok(lib('userintent').pending(root, 'unblock'));
 });
+
+test('review add takes its counts from the report and rejects flags that disagree', () => {
+  const root = tmpdir();
+  ok(cli(root, ['start', 'x']));
+  const state = path.join(root, '.agent-lifecycle/state.json');
+  const s = JSON.parse(fs.readFileSync(state, 'utf8'));
+  for (const x of ['discover', 'specify', 'plan', 'design', 'build', 'verify']) s.stages[x] = { status: 'completed' };
+  s.stages.review = { status: 'in_progress', started: s.updated };
+  fs.writeFileSync(state, JSON.stringify(s));
+  const f = writeFile(root, '.agent-lifecycle/tmp/review.md', '# Review\n\n## Blocking findings\n\n- [B1] src/a.js:3 — wrong result\n\n## Optional improvements\n\n- [O1] src/a.js:9 — naming\n');
+  const lied = cli(root, ['review', 'add', '--file', f, '--blocking', '0', '--optional', '1']);
+  assert.equal(lied.status, 2);
+  assert.match(lied.stderr, /--blocking 0 does not match the report, which lists 1/);
+  assert.match(ok(cli(root, ['review', 'add', '--file', f])), /1 blocking, 1 optional/);
+  assert.equal(cli(root, ['stage', 'complete', 'review']).status, 2);
+  const vague = writeFile(root, '.agent-lifecycle/tmp/vague.md', '# Review\n\nAll good.\n');
+  assert.equal(cli(root, ['review', 'add', '--file', vague]).status, 2);
+});
+
+test('the release gate hash covers the code, committed or not', () => {
+  const { spawnSync } = require('node:child_process');
+  const root = tmpdir();
+  const git = (...a) => assert.equal(spawnSync('git', a, { cwd: root, encoding: 'utf8' }).status, 0, a.join(' '));
+  git('init', '-q');
+  git('config', 'user.email', 't@example.invalid');
+  git('config', 'user.name', 't');
+  writeFile(root, 'src/a.js', 'one\n');
+  git('add', '.');
+  git('commit', '-qm', 'init');
+  ok(cli(root, ['start', 'x']));
+  const hash = () => ok(cli(root, ['hash', 'release'])).trim();
+  const h1 = hash();
+  assert.equal(hash(), h1, 'stable, and lifecycle bookkeeping does not change it');
+  writeFile(root, 'src/a.js', 'two\n');
+  const h2 = hash();
+  assert.notEqual(h2, h1, 'an edit to a tracked file');
+  git('add', '.');
+  git('commit', '-qm', 'same content, now committed');
+  assert.equal(hash(), h2, 'committing the same content keeps the approval valid');
+  writeFile(root, 'src/new.js', 'x\n');
+  assert.notEqual(hash(), h2, 'a new untracked file');
+  assert.equal(spawnSync('git', ['status', '--porcelain', 'src'], { cwd: root, encoding: 'utf8' }).stdout, '?? src/new.js\n', 'the real index is untouched');
+});
+
+test('hooks record the session, and only that session resets the task budget', () => {
+  const { hook } = require('./helpers');
+  const root = tmpdir();
+  toBuild(root, [TASK(), TASK({ files: ['src/b.js'] })]);
+  const budget = () => JSON.parse(fs.readFileSync(path.join(root, '.agent-lifecycle/state.json'), 'utf8')).budget;
+  ok(cli(root, ['dispatch', 'start', 'T1', '--session', 'made-up']));
+  assert.equal(budget().session, null, 'an unrecorded session id is not adopted');
+  hook('session-start', { hook_event_name: 'SessionStart', session_id: 'real-2' }, root);
+  assert.equal(lib('dispatch').currentSession(root), 'real-2');
+});

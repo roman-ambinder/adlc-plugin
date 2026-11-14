@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const { atomicWrite, readJson, withLock } = require('../lib/fsutil');
+const { atomicWrite, readJson, readJsonLines, appendLine, withLock } = require('../lib/fsutil');
 const { linkedWorktree } = require('../lib/worktree');
 const { findStateRoot } = require('../lib/state');
 
@@ -56,6 +56,19 @@ function lifecycle(input) {
   const dir = path.join(root, '.agent-lifecycle');
   const stateFile = path.join(dir, 'state.json');
   return { root, realRoot: real(root), dir, runs: path.join(dir, 'runs'), state: readJson(stateFile, null) };
+}
+
+// Remembers the running session so the CLI can tell a real new session from an invented --session value.
+function noteSession(ctx, input) {
+  const id = input.session_id;
+  if (!id || typeof id !== 'string') return;
+  try {
+    const file = path.join(ctx.runs, 'sessions.jsonl');
+    const last = readJsonLines(file).pop();
+    if (!last || last.session !== id) appendLine(file, { session: id, ts: new Date().toISOString() });
+  } catch {
+    // never block a hook on bookkeeping
+  }
 }
 
 function emit(obj) {
@@ -117,4 +130,4 @@ function updateBindings(ctx, fn) {
   }, { waitMs: 2000 });
 }
 
-module.exports = { WRITE_TOOLS, readStdin, startDirs, lifecycle, emit, preToolDecision, roleOf, relPath, locate, workspaceOf, readBindings, updateBindings };
+module.exports = { WRITE_TOOLS, readStdin, startDirs, noteSession, lifecycle, emit, preToolDecision, roleOf, relPath, locate, workspaceOf, readBindings, updateBindings };

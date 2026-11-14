@@ -303,3 +303,16 @@ test('the reviewer and other adlc subagents cannot write files through the shell
     assert.equal(decision(hook('guard', bash('git diff --stat 2>&1', who), root)), null, role);
   }
 });
+
+test('guard denies the Grep tool on secret files and more secret file names', () => {
+  const root = project();
+  const grep = (ti) => ({ hook_event_name: 'PreToolUse', tool_name: 'Grep', cwd: root, tool_input: { pattern: 'KEY', ...ti } });
+  for (const ti of [{ path: path.join(root, '.env') }, { path: 'config/server.pem' }, { glob: '.env*' }, { glob: '**/*.key' }, { path: '.npmrc' }]) {
+    assert.equal(decision(hook('guard', grep(ti), root)), 'deny', JSON.stringify(ti));
+  }
+  for (const ti of [{ path: 'src' }, { glob: '*.js' }, { path: '.env.example' }, {}]) assert.equal(decision(hook('guard', grep(ti), root)), null, JSON.stringify(ti));
+  const read = (p) => ({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: root, tool_input: { file_path: p } });
+  for (const p of ['.envrc', '.netrc', 'home/.aws/credentials', 'certs/site.p12']) assert.equal(decision(hook('guard', read(p), root)), 'deny', p);
+  assert.equal(decision(hook('guard', bash('cat ~/.aws/credentials'), root)), 'deny');
+  assert.match(fs.readFileSync(path.join(__dirname, '../plugins/adlc/hooks/hooks.json'), 'utf8'), /Bash\|Read\|Grep\|/);
+});

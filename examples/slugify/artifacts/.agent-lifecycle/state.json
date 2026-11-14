@@ -2,52 +2,52 @@
   "schema": 1,
   "revision": 18,
   "change": {
-    "id": "chg-20261113-add-slugify-utility",
+    "id": "chg-20261114-add-slugify-utility",
     "title": "Add slugify utility",
     "type": "feature",
-    "created": "2026-11-13T20:29:47.333Z"
+    "created": "2026-11-14T11:24:53.965Z"
   },
   "stage": "done",
   "stages": {
     "discover": {
       "status": "skipped",
       "reason": "small change",
-      "ts": "2026-11-13T20:29:47.333Z"
+      "ts": "2026-11-14T11:24:53.965Z"
     },
     "specify": {
       "status": "completed",
-      "started": "2026-11-13T20:29:47.632Z",
-      "ended": "2026-11-13T20:29:48.371Z"
+      "started": "2026-11-14T11:24:54.038Z",
+      "ended": "2026-11-14T11:24:54.089Z"
     },
     "plan": {
       "status": "completed",
-      "started": "2026-11-13T20:29:48.553Z",
-      "ended": "2026-11-13T20:29:49.139Z"
+      "started": "2026-11-14T11:24:54.140Z",
+      "ended": "2026-11-14T11:24:54.306Z"
     },
     "design": {
       "status": "skipped",
       "reason": "small change",
-      "ts": "2026-11-13T20:29:47.333Z"
+      "ts": "2026-11-14T11:24:53.965Z"
     },
     "build": {
       "status": "completed",
-      "started": "2026-11-13T20:29:49.713Z",
-      "ended": "2026-11-13T20:29:53.685Z"
+      "started": "2026-11-14T11:24:54.489Z",
+      "ended": "2026-11-14T11:24:55.359Z"
     },
     "verify": {
       "status": "completed",
-      "started": "2026-11-13T20:29:53.869Z",
-      "ended": "2026-11-13T20:29:54.986Z"
+      "started": "2026-11-14T11:24:55.401Z",
+      "ended": "2026-11-14T11:24:55.866Z"
     },
     "review": {
       "status": "completed",
-      "started": "2026-11-13T20:29:55.167Z",
-      "ended": "2026-11-13T20:29:55.556Z"
+      "started": "2026-11-14T11:24:55.908Z",
+      "ended": "2026-11-14T11:24:56.006Z"
     },
     "release": {
       "status": "completed",
-      "started": "2026-11-13T20:29:55.790Z",
-      "ended": "2026-11-13T20:29:56.360Z"
+      "started": "2026-11-14T11:24:56.051Z",
+      "ended": "2026-11-14T11:24:56.370Z"
     }
   },
   "contracts": [],
@@ -83,9 +83,9 @@
       "attempts": 0,
       "max_attempts": 3,
       "timing": {
-        "dispatched_at": "2026-11-13T20:29:49.909Z",
-        "returned_at": "2026-11-13T20:29:52.277Z",
-        "integrated_at": "2026-11-13T20:29:53.505Z"
+        "dispatched_at": "2026-11-14T11:24:54.543Z",
+        "returned_at": "2026-11-14T11:24:55.094Z",
+        "integrated_at": "2026-11-14T11:24:55.306Z"
       }
     }
   ],
@@ -109,13 +109,13 @@
   "leases": [
     {
       "task": "T1",
-      "lease": "L-c72358",
+      "lease": "L-cee7dc",
       "session": "e2e-session",
       "agent_id": null,
       "workspace": null,
       "status": "returned",
-      "started": "2026-11-13T20:29:49.909Z",
-      "ended": "2026-11-13T20:29:52.277Z"
+      "started": "2026-11-14T11:24:54.543Z",
+      "ended": "2026-11-14T11:24:55.094Z"
     }
   ],
   "metrics": {
@@ -128,7 +128,7 @@
     "max_repair_attempts": 3,
     "max_tasks_per_run": 5,
     "tasks_this_run": 1,
-    "session": "e2e-session"
+    "session": null
   },
   "config": {
     "approval_gates": [
@@ -153,12 +153,12 @@
   },
   "reviews": [
     {
-      "file": "reviews/20261113202955.md",
+      "file": "reviews/20261114112455.md",
       "blocking": 0,
       "optional": 1,
-      "ts": "2026-11-13T20:29:55.356Z"
+      "ts": "2026-11-14T11:24:55.954Z"
     }
   ],
   "blocker": null,
-  "updated": "2026-11-13T20:29:56.360Z"
+  "updated": "2026-11-14T11:24:56.370Z"
 }

@@ -4,13 +4,14 @@
 // A user-typed /adlc:approve, /adlc:skip, /adlc:unblock or /adlc:archive leaves an intent the CLI requires before it acts.
 // An approval intent carries the hash of what the user was looking at, so edits made after the prompt are not approved.
 // /adlc:start leaves one only when the user's prompt or plugin setting reduces the approval gates.
-const { readStdin, lifecycle, startDirs } = require('./common');
+const { readStdin, lifecycle, startDirs, noteSession } = require('./common');
 const { parsePrompt, record } = require('../lib/userintent');
 const st = require('../lib/state');
 
 function main() {
   const input = readStdin();
   const ctx = lifecycle(input);
+  if (ctx) noteSession(ctx, input);
   const parsed = parsePrompt(input.prompt);
   if (!parsed) return;
   try {
