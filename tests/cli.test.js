@@ -266,16 +266,20 @@ test('the release gate hash covers the code, committed or not', () => {
   git('init', '-q');
   git('config', 'user.email', 't@example.invalid');
   git('config', 'user.name', 't');
-  writeFile(root, 'src/a.js', 'one\n');
+  const a = writeFile(root, 'src/a.js', 'one\n');
+  const past = new Date(Date.now() - 60000);
+  fs.utimesSync(a, past, past);
   git('add', '.');
   git('commit', '-qm', 'init');
   ok(cli(root, ['start', 'x']));
   const hash = () => ok(cli(root, ['hash', 'release'])).trim();
   const h1 = hash();
   assert.equal(hash(), h1, 'stable, and lifecycle bookkeeping does not change it');
-  writeFile(root, 'src/a.js', 'two\n');
+  // same size and the same mtime as the committed file: git's stat cache would call it unchanged
+  const f = writeFile(root, 'src/a.js', 'two\n');
+  fs.utimesSync(f, past, past);
   const h2 = hash();
-  assert.notEqual(h2, h1, 'an edit to a tracked file');
+  assert.notEqual(h2, h1, 'a same-size edit to a tracked file');
   git('add', '.');
   git('commit', '-qm', 'same content, now committed');
   assert.equal(hash(), h2, 'committing the same content keeps the approval valid');
