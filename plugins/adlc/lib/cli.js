@@ -35,7 +35,7 @@ const HELP = `usage: adlc <command> [args]
   worker claim <T> --lease <L>   worker handoff <T> --file <json>
   integrate check <T>  integrate done <T>
   lease stopped <L> <note>   lease lost <L> <note>
-  handoff <note>   archive [--force] (user-only)   init
+  handoff <note>   summary [--json]   archive [--force] (user-only)   cancel <reason> (user-only)   init
 exit codes: 0 ok, 1 usage, 2 rule violation, 3 concurrent modification, 4 not initialised,
             5 command failed (evidence recorded), 70 internal error`;
 
@@ -124,6 +124,59 @@ function statusText(o) {
     `Next: ${o.next.action} ${o.next.stage}`,
   ];
   return lines.join('\n');
+}
+
+// Moves everything but the archive itself and lock files into archive/<change id>[-n]. Returns the relative path.
+function moveToArchive(root, id) {
+  const p = st.paths(root);
+  let name = id;
+  for (let n = 2; fs.existsSync(path.join(p.dir, 'archive', name)); n += 1) name = `${id}-${n}`;
+  const dest = path.join(p.dir, 'archive', name);
+  fs.mkdirSync(dest, { recursive: true });
+  for (const f of fs.readdirSync(p.dir)) {
+    if (['archive', '.gitignore', '.lock', '.check.lock'].includes(f)) continue;
+    fs.renameSync(path.join(p.dir, f), path.join(dest, f));
+  }
+  return `archive/${name}`;
+}
+
+// ---- delivery summary: time per stage and task, attempts, check runs, review findings ----
+const ms = (a, b) => (a && b ? Math.max(0, Date.parse(b) - Date.parse(a)) : null);
+function human(n) {
+  if (n === null || n === undefined) return '-';
+  const s = Math.round(n / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m}m ${s % 60}s` : `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+function summaryOf(root, s) {
+  const ev = evidence.list(root);
+  const end = stages.current(s) === 'done' ? s.updated : st.now();
+  return {
+    change: { id: s.change.id, title: s.change.title, stage: stages.current(s) },
+    elapsed_ms: ms(s.change.created, end),
+    stages: st.STAGES.map((x) => ({ stage: x, status: s.stages[x].status, ms: ms(s.stages[x].started, s.stages[x].ended) })),
+    tasks: s.tasks.map((t) => ({ id: t.id, title: t.title, status: t.status, attempts: t.attempts, ms: ms(t.timing.dispatched_at, t.timing.integrated_at || t.timing.returned_at) })),
+    checks: { runs: ev.length, failed: ev.filter((e) => e.exit !== 0).length, ms: ev.reduce((a, e) => a + (e.duration_ms || 0), 0) },
+    reviews: s.reviews.map((r) => ({ file: r.file, blocking: r.blocking, optional: r.optional })),
+    retries: s.metrics.retries,
+    integration_failures: s.metrics.integration_failures,
+    tokens: s.metrics.tokens,
+    cost: s.metrics.cost,
+  };
+}
+
+function summaryText(o) {
+  return [
+    `Change ${o.change.id}: ${o.change.title} (stage ${o.change.stage}); elapsed ${human(o.elapsed_ms)}`,
+    `Stages: ${o.stages.map((x) => `${x.stage} ${x.status === 'skipped' ? 'skipped' : human(x.ms)}`).join(', ')}`,
+    'Tasks:',
+    ...(o.tasks.length ? o.tasks.map((t) => `  ${t.id} ${t.status} in ${human(t.ms)}, ${t.attempts} failed attempt(s)  ${t.title}`) : ['  none']),
+    `Checks: ${o.checks.runs} run(s), ${o.checks.failed} failed, ${human(o.checks.ms)} running checks`,
+    `Reviews: ${o.reviews.map((r) => `${r.blocking} blocking / ${r.optional} optional`).join('; ') || 'none'}`,
+    `Retries ${o.retries}; integration failures ${o.integration_failures}; tokens and cost: ${o.cost} by hooks (see /cost in Claude Code)`,
+  ].join('\n');
 }
 
 const handlers = {
@@ -445,8 +498,9 @@ const handlers = {
     }
     if (sub === 'done') {
       return st.mutate(root, (s) => {
-        integrate.integrateDone(root, s, id);
-        return { text: `${id} integrated` };
+        const r = integrate.integrateDone(root, s, id) || {};
+        const tail = r.cleanup ? `\nits worktree and branch are merged; once build is complete, ask the user to approve these exact commands to remove them:\n${r.cleanup.map((c) => `  ${c}`).join('\n')}` : '';
+        return { obj: { task: id, ...r }, text: `${id} integrated${tail}` };
       });
     }
     throw usage('usage: adlc integrate check|done <T>');
@@ -470,17 +524,34 @@ const handlers = {
 
   archive({ root, flags }) {
     const s = st.load(root);
-    if (stages.current(s) !== 'done' && !flags.force) throw rule(`change ${s.change.id} is not done (stage ${stages.current(s)}); use --force to archive anyway`);
+    if (stages.current(s) !== 'done' && !flags.force) throw rule(`change ${s.change.id} is not done (stage ${stages.current(s)}); use --force to archive anyway, or /adlc:cancel to stop it with a reason`);
     // Archiving removes state.json, which switches the hooks off: only the user decides that.
     userIntent.consume(root, userIntent.find(root, 'archive'));
-    const p = st.paths(root);
-    const dest = path.join(p.dir, 'archive', s.change.id);
-    fs.mkdirSync(dest, { recursive: true });
-    for (const name of fs.readdirSync(p.dir)) {
-      if (['archive', '.gitignore', '.lock', '.check.lock'].includes(name)) continue;
-      fs.renameSync(path.join(p.dir, name), path.join(dest, name));
-    }
-    return { text: `archived to .agent-lifecycle/archive/${s.change.id}` };
+    return { text: `archived to .agent-lifecycle/${moveToArchive(root, s.change.id)}` };
+  },
+
+  // Stops an unfinished change: active workers' leases end as lost, the reason is recorded, and the change is archived.
+  cancel({ root, pos }) {
+    const reason = need(pos.slice(1).join(' '), 'usage: adlc cancel "<reason>"');
+    const s0 = st.load(root);
+    if (stages.current(s0) === 'done') throw rule(`change ${s0.change.id} is done; archive it with /adlc:archive instead`);
+    const intent = userIntent.find(root, 'cancel');
+    const s = st.mutate(root, (x) => {
+      for (const l of x.leases.filter((y) => y.status === 'active')) dispatch.endLease(l, 'lost');
+      x.blocker = `cancelled by the user: ${reason}`;
+      return x;
+    });
+    userIntent.consume(root, intent);
+    record(root, { type: 'cancel', change: s.change.id, stage: stages.current(s), reason, actor: 'user' });
+    appendLine(path.join(st.paths(root).dir, 'handoff.md'), `\n## ${st.now()}\n\nCancelled by the user at stage ${stages.current(s)}: ${redact(reason)}`);
+    const where = moveToArchive(root, s.change.id);
+    const wts = s.leases.filter((l) => l.workspace).map((l) => l.workspace);
+    return { text: [`cancelled ${s.change.id} and archived it to .agent-lifecycle/${where}`, wts.length ? `worktrees left in place (remove them with git worktree remove when no longer needed): ${[...new Set(wts)].join(', ')}` : ''].filter(Boolean).join('\n') };
+  },
+
+  summary({ root }) {
+    const o = summaryOf(root, st.load(root));
+    return { obj: o, text: summaryText(o) };
   },
 };
 

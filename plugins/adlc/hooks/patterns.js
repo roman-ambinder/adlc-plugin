@@ -29,9 +29,9 @@ const ADLC = String.raw`\badlc['"]?\s+['"]?`;
 // after env/exec/xargs-style wrappers or inside sh -c "..."), so `grep "adlc approve" docs/` is not denied. Missing an
 // unusual form is safe: the CLI itself refuses these actions without the user's intent; the guard only explains early.
 const CMD_POS = String.raw`(?:^|[;&|(\n]|\$\(|\b(?:exec|command|env|sudo|xargs|time|nohup|timeout\s+\S+)\s|\b(?:ba|z|da)?sh\s+-c\s+['"])\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:node\s+)?(?:['"]?[^\s'";&|()]*\/)?`;
-const USER_ONLY = new RegExp(`${CMD_POS}${ADLC}(approve|skip|unblock|archive)\\b`);
+const USER_ONLY = new RegExp(`${CMD_POS}${ADLC}(approve|skip|unblock|archive|cancel)\\b`);
 // Same as USER_ONLY, capturing the action and its first argument (gate or stage).
-const USER_ONLY_ARG = new RegExp(`${CMD_POS}${ADLC}(approve|skip|unblock|archive)\\b['"]?\\s*['"]?([^\\s'"]*)`);
+const USER_ONLY_ARG = new RegExp(`${CMD_POS}${ADLC}(approve|skip|unblock|archive|cancel)\\b['"]?\\s*['"]?([^\\s'"]*)`);
 const ADLC_SUBCOMMAND = new RegExp(`${ADLC}([a-z-]+)`, 'g');
 const WORKER_CLAIM = new RegExp(`${ADLC}worker\\s+claim\\s+['"]?(T\\d+)['"]?\\s+--lease\\s+['"]?(L-[0-9a-f]+)`);
 

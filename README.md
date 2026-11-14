@@ -30,7 +30,7 @@ hooks: SessionStart (status) · UserPromptSubmit (user intent) · PreToolUse (gu
   - deny edits to everything the CLI writes under `.agent-lifecycle/` (state, approvals, evidence, handoffs, packets, reviews, traceability), and commands that remove or move that directory;
   - deny edits that skip tests;
   - deny commands that mask a check's exit status (`|| true`, `; exit 0`, `set +e`), and `adlc run` refuses to record them;
-  - deny reading `.env`, keys, certificates and credential files (`.npmrc`, `.netrc`, `.aws/credentials`, …) through Bash, Read or Grep;
+  - deny reading `.env`, keys, certificates and credential files (`.npmrc`, `.netrc`, `.aws/credentials`, …) through Bash, Read or Grep, and ask before a Grep over a folder that holds such files (unless git ignores them or a glob or type filter excludes them);
   - deny writes outside a role's or task's scope;
   - ask before commits, pushes, PRs, installs, network access, destructive commands, publishing and deploying.
 
@@ -73,7 +73,7 @@ adlc-plugin/
 │   ├── hooks/                           hooks.json, guard, audit, subagent-stop,
 │   │                                    session-start, prompt-submit, common, patterns
 │   ├── skills/<name>/SKILL.md           start plan approve next status verify review
-│   │                                    resume release skip unblock archive coordinator worker-contract
+│   │                                    resume release skip unblock archive cancel coordinator worker-contract
 │   ├── agents/                          analyst architect developer developer-worktree tester reviewer
 │   ├── templates/                       requirements plan decisions handoff release review
 │   ├── schemas/                         state.schema.json, handoff.schema.json (enforced by lib/schema.js)
@@ -110,7 +110,7 @@ After changing plugin files, run `/reload-plugins` or start a new session.
 - keeps commits, pushes, PRs, installs and publishing on `ask`;
 - denies the Read tool on `.env`, keys and similar files (the guard hook also blocks them in Bash commands and Read calls).
 
-`approve`, `skip`, `unblock`, `archive` and `lease` are deliberately left out of the allow list; your own slash command is what authorises the first four.
+`approve`, `skip`, `unblock`, `archive`, `cancel` and `lease` are deliberately left out of the allow list; your own slash command is what authorises the first five.
 
 ## Commands
 
@@ -120,13 +120,14 @@ After changing plugin files, run `/reload-plugins` or start a new session.
 | `/adlc:plan` | Specify (acceptance criteria) → Plan (repository inspection, tasks, packets) → Design (architect). Ends by asking you to approve |
 | `/adlc:approve plan\|release [note]` | **User-only.** Records your approval, tied to a hash of everything it covers |
 | `/adlc:next` | Run the next approved stage: build, verify, review or release |
-| `/adlc:status` | Stage, gates, tasks, blockers, budget, next step |
+| `/adlc:status` | Stage, gates, tasks, blockers, budget, next step. `adlc summary` adds time per stage and task, check runs and review findings |
 | `/adlc:verify` | Run the approved task checks and the repository's tests, format check, lint, type check and security checks through `adlc run` |
 | `/adlc:review` | Independent review by the reviewer agent; blocking findings reopen build |
 | `/adlc:resume` | Rebuild context in a new session and recover workers from the previous session |
 | `/adlc:release` | Traceability, release notes (changes, migration, deployment, rollback), then complete after approval |
 | `/adlc:skip <stage> <reason>` | **User-only.** Skip discover, specify, design or release |
 | `/adlc:unblock <note> [--task T]` | **User-only.** Clear a blocker, for example a task that hit its repair limit |
+| `/adlc:cancel <reason>` | **User-only.** Stop an unfinished change: active workers' leases end, the reason is recorded, and the change is archived. Code already written stays for you to keep or discard |
 | `/adlc:archive [--force]` | **User-only.** Move the change to `.agent-lifecycle/archive/` so a new one can start. `--force` archives a change that is not done |
 
 The underlying CLI is `adlc` (on the Bash tool's PATH while the plugin is enabled). Run `adlc help` for every subcommand. Exit codes:
@@ -166,7 +167,7 @@ Each parallel worker runs in its own git worktree (`adlc:developer-worktree`, `i
 - `.claude/worktrees/` listed in `.gitignore`;
 - no uncommitted changes outside `.agent-lifecycle/`, since worktrees only see committed files.
 
-Workers never commit. When a task passes `adlc integrate check`, the CLI prints the exact `git add`, `git commit` (in the worktree) and `git merge --no-ff` (into your current branch) commands. The coordinator shows them and runs them only through permission prompts. Files that a check run wrote in the worktree (coverage output, lockfile rewrites) are left out of the printed `git add` and only warn. `adlc integrate done` refuses a task until its commit is merged into `HEAD` and the cross-task checks have run after the merge. Merge conflicts are aborted and reported, never resolved automatically.
+Workers never commit. After `adlc integrate done`, the CLI prints `git worktree remove` and `git branch -d` commands for the merged worktree; the coordinator runs them after build with your approval, and git refuses to remove anything unmerged or dirty. When a task passes `adlc integrate check`, the CLI prints the exact `git add`, `git commit` (in the worktree) and `git merge --no-ff` (into your current branch) commands. The coordinator shows them and runs them only through permission prompts. Files that a check run wrote in the worktree (coverage output, lockfile rewrites) are left out of the printed `git add` and only warn. `adlc integrate done` refuses a task until its commit is merged into `HEAD` and the cross-task checks have run after the merge. Merge conflicts are aborted and reported, never resolved automatically.
 
 ## Project state: `.agent-lifecycle/`
 

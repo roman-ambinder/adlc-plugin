@@ -20,6 +20,10 @@ _Derived from the repository's own scripts and docs. Write "No deployment proces
 
 _How to undo this change safely._
 
+## Delivery summary
+
+_Output of `adlc summary`: time per stage and task, attempts, check runs, review findings._
+
 ## Known issues and unverified claims
 
 _Anything not verified by recorded evidence._

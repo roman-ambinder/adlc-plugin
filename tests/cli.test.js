@@ -298,3 +298,38 @@ test('hooks record the session, and only that session resets the task budget', (
   hook('session-start', { hook_event_name: 'SessionStart', session_id: 'real-2' }, root);
   assert.equal(lib('dispatch').currentSession(root), 'real-2');
 });
+
+test('cancel is user-only, needs a reason, ends active leases, records why and archives the change', () => {
+  const { userPrompt } = require('./helpers');
+  const root = tmpdir();
+  toBuild(root, [TASK()]);
+  ok(cli(root, ['dispatch', 'start', 'T1', '--session', 's']));
+  assert.equal(cli(root, ['cancel', 'not needed'], { asModel: true }).status, 2, 'the model cannot cancel');
+  userPrompt(root, '/adlc:cancel not needed any more');
+  assert.equal(cli(root, ['cancel'], { asModel: true }).status, 1, 'a reason is required');
+  const r = cli(root, ['cancel', 'not needed any more'], { asModel: true });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /cancelled chg-.* and archived it to \.agent-lifecycle\/archive\/chg-/);
+  assert.equal(cli(root, ['status']).status, 4, 'no active change');
+  const dir = path.join(root, '.agent-lifecycle/archive', fs.readdirSync(path.join(root, '.agent-lifecycle/archive'))[0]);
+  const s = JSON.parse(fs.readFileSync(path.join(dir, 'state.json'), 'utf8'));
+  assert.equal(s.leases[0].status, 'lost');
+  assert.match(fs.readFileSync(path.join(dir, 'approvals.jsonl'), 'utf8'), /"type":"cancel".*"reason":"not needed any more"/);
+  // a second change with the same title archives next to the first one
+  ok(cli(root, ['start', 'Demo change']));
+  ok(cli(root, ['archive', '--force']));
+  assert.equal(fs.readdirSync(path.join(root, '.agent-lifecycle/archive')).length, 2);
+});
+
+test('summary reports time per stage and task, check runs and review findings', () => {
+  const root = tmpdir();
+  toBuild(root, [TASK()]);
+  ok(cli(root, ['run', '--stage', 'build', '--', 'true']));
+  const o = JSON.parse(ok(cli(root, ['summary', '--json'])));
+  assert.equal(o.stages.find((x) => x.stage === 'discover').status, 'skipped');
+  assert.equal(typeof o.stages.find((x) => x.stage === 'plan').ms, 'number');
+  assert.deepEqual(o.checks.runs, 1);
+  assert.equal(o.tasks[0].id, 'T1');
+  assert.equal(o.cost, 'not observable');
+  assert.match(ok(cli(root, ['summary'])), /Stages: discover skipped, specify \d+s/);
+});

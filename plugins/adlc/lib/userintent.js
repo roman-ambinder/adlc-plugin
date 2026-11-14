@@ -1,5 +1,5 @@
 'use strict';
-// Proof that the user, not the model, asked for approve / skip / unblock / archive (or a start with reduced gates).
+// Proof that the user, not the model, asked for approve / skip / unblock / archive / cancel (or a start with reduced gates).
 // The UserPromptSubmit hook sees only prompts the user submits and records an intent here (hooks/prompt-submit.js).
 // The CLI needs one matching, unexpired, unused intent per action. There is no terminal shortcut: a pseudo-terminal
 // (`script -c ...`) is indistinguishable from a person, so a person at a terminal types the slash command too.
@@ -10,7 +10,7 @@ const { appendLine, readJsonLines } = require('./fsutil');
 const { rule } = require('./errors');
 
 const TTL_MS = 15 * 60 * 1000;
-const ACTIONS = ['approve', 'skip', 'unblock', 'archive', 'start'];
+const ACTIONS = ['approve', 'skip', 'unblock', 'archive', 'cancel', 'start'];
 const GATES = ['plan', 'release'];
 
 const file = (root) => path.join(paths(root).runs, 'intents.jsonl');
@@ -32,10 +32,10 @@ function gatesOf(raw) {
 // "/adlc:approve plan looks good" -> { action: 'approve', arg: 'plan' }; "/adlc:skip design reason" -> arg 'design'.
 // "/adlc:start x" yields an intent only when the user's prompt or plugin setting reduces the approval gates.
 function parsePrompt(prompt, env = process.env) {
-  const m = /^\s*\/adlc:(approve|skip|unblock|archive|start)\b\s*(\S*)/.exec(String(prompt || ''));
+  const m = /^\s*\/adlc:(approve|skip|unblock|archive|cancel|start)\b\s*(\S*)/.exec(String(prompt || ''));
   if (!m) return null;
   const [, action, first] = m;
-  if (action === 'unblock' || action === 'archive') return { action, arg: null };
+  if (['unblock', 'archive', 'cancel'].includes(action)) return { action, arg: null };
   if (action === 'approve') return GATES.includes(first) ? { action, arg: first } : null;
   if (action === 'skip') return first ? { action, arg: first } : null;
   const flag = /--approval-gates(?:\s+|=)(\S+)/.exec(String(prompt));
