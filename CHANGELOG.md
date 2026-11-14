@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 — 2026-11-14
 
-Fixes from the 2026-11-14 review. All covered by `npm test`; not yet live-tested in a session.
+Hardening from the 2026-11-14 review. All covered by `npm test` and CI; not yet live-tested in a Claude Code session.
 
 ### Changed (read before upgrading)
 - **No terminal shortcut for user-only commands.** `adlc approve`, `skip`, `unblock` and now `archive` always need your own slash command; a pseudo-terminal could pass as a person. New skill: `/adlc:archive [--force]`.
