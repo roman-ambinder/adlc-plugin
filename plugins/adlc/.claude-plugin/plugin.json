@@ -1,7 +1,7 @@
 {
   "name": "adlc",
   "displayName": "ADLC — Agentic Development Lifecycle",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Coordinates focused agents through discover → specify → plan → design → build → verify → review → release, with on-disk state, evidence, and approval gates.",
   "author": { "name": "adlc contributors" },
   "license": "MIT",

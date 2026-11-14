@@ -1,6 +1,6 @@
 # adlc capabilities — implemented, tested, unsupported
 
-Status as of version 0.4.0 (Slices 1–3 plus the 2026-11-13 review follow-up), 2026-11-13. "Tested" means covered by `npm test` (all passing at the time of writing; the count is not recorded here so it cannot drift) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
+Status as of version 0.5.0 (Slices 1–3, the 2026-11-13 review follow-up and the 2026-11-14 hardening), 2026-11-14. "Tested" means covered by `npm test` (all passing at the time of writing; the count is not recorded here so it cannot drift) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
 
 ## Implemented and tested
 

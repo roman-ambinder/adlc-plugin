@@ -8,7 +8,7 @@ Focused subagents do the work: analyst, architect, developer, tester and reviewe
 
 It is built for solo developers and small teams. It is language-agnostic: it uses the repository's own test, lint, format and type-check commands.
 
-> **Version 0.4.0.** See [CHANGELOG.md](CHANGELOG.md). Build runs sequentially, in parallel in the **shared checkout**, or in parallel in **isolated git worktrees** (one per worker), depending on the plan and the repository. The chosen mode and the reasons are recorded in `plan.md`. See [docs/capabilities.md](docs/capabilities.md).
+> **Version 0.5.0.** See [CHANGELOG.md](CHANGELOG.md). Build runs sequentially, in parallel in the **shared checkout**, or in parallel in **isolated git worktrees** (one per worker), depending on the plan and the repository. The chosen mode and the reasons are recorded in `plan.md`. See [docs/capabilities.md](docs/capabilities.md).
 
 ## Architecture
 
