@@ -92,8 +92,8 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 - Shared mode completed integration live. Worktree mode completed end to end with the user's commit and merge commands run by hand (`-p` cannot approve them): two `--no-ff` merges, `integrate done` accepted both.
 - One earlier worktree run had both workers' first Bash call denied by the platform permission layer (their claims never ran). It did not reproduce on a rerun with the same flags and I did not find the cause.
 
-**Still not live-tested** (the maintainer's steps for this are in [interactive-checklist.md](interactive-checklist.md))
-- An interactive session, as opposed to `-p`, including typing `/adlc:approve` in the app so the `UserPromptSubmit` intent is recorded (verified only with `-p`).
+**Still not live-tested**
+- ~~An interactive session, as opposed to `-p`~~: done on 2026-11-14 with the maintainer's [interactive checklist](interactive-checklist.md); see the end of this file.
 - SubagentStop's `last_assistant_message` was empty in `-p` (the subagent reported through its handback), so stop records have an empty excerpt. (In the 0.5.0 run below it was filled for the analyst, developer and reviewer.)
 
 Set `ADLC_HOOK_LOG=<file>` to record hook metadata (event, tool, `agent_id`, `agent_type`, session, cwd; never tool input) when diagnosing.
@@ -231,4 +231,7 @@ The plugin was installed from GitHub into an empty Claude Code config and used o
 `/adlc:setup` (`lib/setup.js`) is tested by `tests/setup.test.js`: fresh project, dry run, keeping existing entries, skipping clashing rules, invalid settings, `.gitignore` variants, running from a subdirectory.
 
 
-**Post-release check (v0.7.0, 2026-11-14).** Installed with `claude plugin marketplace add 'roman-ambinder/adlc-plugin#v0.7.0'` into an empty Claude Code config: version 0.7.0, 16 skills including `setup`; `adlc setup --dry-run` in a new repository listed the template entries. No model calls. The maintainer's interactive checklist ([interactive-checklist.md](interactive-checklist.md)) results are not yet recorded.
+**Post-release check (v0.7.0, 2026-11-14).** Installed with `claude plugin marketplace add 'roman-ambinder/adlc-plugin#v0.7.0'` into an empty Claude Code config: version 0.7.0, 16 skills including `setup`; `adlc setup --dry-run` in a new repository listed the template entries. No model calls.
+
+**Interactive checklist (v0.7.0, 2026-11-14).** The maintainer ran all 18 steps of [interactive-checklist.md](interactive-checklist.md) in an interactive session and reported every step as passed: install from GitHub, `/adlc:setup` (dry run, ask, apply, and "already set up" on a second run), a change from `/adlc:start` to `done` with `/clear` between stages, a refused prose approval, and `/adlc:approve plan` and `/adlc:approve release` typed in the session.
+

@@ -89,7 +89,7 @@ Tip: run `/clear` (or open a new session) between stages. adlc saves its progres
 - One change at a time per repository.
 - macOS and Linux only. Windows is not supported; WSL is untested.
 - adlc guards what agents do, but it is **not a sandbox**. Shell commands are checked by pattern matching, which is best-effort: a script or other indirection can get past it. Claude Code's own permission prompts still apply. See [docs/safety.md](docs/safety.md#limits).
-- Tested end to end with `claude -p` (one prompt per run). A full interactive session in the Claude app has not been fully tested yet.
+- Tested end to end with `claude -p` and in an interactive session (see [docs/capabilities.md](docs/capabilities.md)).
 
 ## Commands
 
