@@ -2,7 +2,7 @@
 description: Run the adlc Specify, Plan and Design stages and prepare the plan for the user's approval. Use after /adlc:start, or when the user asks to produce a plan for the active change.
 ---
 
-Read `${CLAUDE_PLUGIN_ROOT}/skills/coordinator/SKILL.md` first and follow it. Check `adlc next` before each step and skip steps for stages that are already completed or skipped.
+Load the `adlc:coordinator` skill with the Skill tool first and follow it. If the Skill tool cannot load it, read `${CLAUDE_PLUGIN_ROOT}/skills/coordinator/SKILL.md` instead. Check `adlc next` before each step and skip steps for stages that are already completed or skipped.
 
 Runtime values for this session (substituted by Claude Code when this skill loads; the coordinator rules refer to them):
 - CLI fallback if `adlc` is not on PATH: `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`

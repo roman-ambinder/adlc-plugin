@@ -80,3 +80,24 @@ test('setup skill runs a dry run before writing, and the template does not pre-a
   const tpl = JSON.parse(read('settings-template.json'));
   assert.ok(!tpl.permissions.allow.some((e) => /adlc setup/.test(e)));
 });
+
+// First-run test P1: the plugin folder is outside the project, so reading its files needs a permission prompt.
+test('skills load the coordinator and other skills with the Skill tool, not by reading plugin files', () => {
+  for (const name of ['start', 'plan', 'next', 'verify', 'review', 'release', 'resume']) {
+    const text = read(`skills/${name}/SKILL.md`);
+    assert.match(text, /Load the `adlc:coordinator` skill with the Skill tool/, name);
+    assert.doesNotMatch(text, /follow `\$\{CLAUDE_PLUGIN_ROOT\}\/skills\//, name);
+  }
+});
+
+test('the reviewer has the report format in its own instructions', () => {
+  const text = read('agents/reviewer.md');
+  for (const h of ['## Blocking findings', '## Optional improvements', '## Requirement coverage', '## Verification notes']) assert.ok(text.includes(h), h);
+  assert.doesNotMatch(text, /CLAUDE_PLUGIN_ROOT\}\/templates/);
+  assert.doesNotMatch(read('skills/review/SKILL.md'), /CLAUDE_PLUGIN_ROOT\}\/templates/);
+});
+
+// First-run test P2: with no plugin options saved, the model stopped at the unfilled ${user_config.*} text.
+test('start tells the model to run the command even when plugin options are unfilled', () => {
+  assert.match(read('skills/start/SKILL.md'), /run it exactly as written[^\n]*ignores/i);
+});
