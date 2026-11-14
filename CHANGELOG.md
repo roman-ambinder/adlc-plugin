@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Releases are automatic: when the version on `main` changes, a workflow runs the tests, tags `v<version>` and publishes a GitHub release with the changelog section.
+
 ## 0.5.1 — 2026-11-14
 
 Fixes found by a live parallel-build test (2026-11-14).

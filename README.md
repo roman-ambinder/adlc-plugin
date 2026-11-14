@@ -253,6 +253,8 @@ npm run validate
 
 `npm test` runs the `node:test` suites (state, stages, tasks, gates, evidence, dispatch, integration, CLI, hooks, skill and agent files, and the end-to-end example). CI (`.github/workflows/ci.yml`) runs them on Node 18, 20, 22 and 24 for pull requests and pushes to `main`, and validates the manifests with a pinned Claude Code version. `npm run validate` runs `claude plugin validate --strict` on the plugin and the marketplace.
 
+**Releasing.** Bump `version` in `plugins/adlc/.claude-plugin/plugin.json` and `package.json`, add a `## <version> — <date>` section to `CHANGELOG.md`, and merge to `main`. `.github/workflows/release.yml` runs the tests, tags the commit `v<version>` and publishes a GitHub release with that changelog section. It does nothing if the tag already exists, and can also be started by hand (workflow_dispatch).
+
 ## Troubleshooting
 
 | Symptom | Fix |
