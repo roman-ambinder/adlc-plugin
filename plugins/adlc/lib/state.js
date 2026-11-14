@@ -157,7 +157,13 @@ function load(root) {
   } catch (err) {
     throw rule(`state.json is not valid JSON (${err.message}); restore it from version control`);
   }
-  if (s.schema !== SCHEMA) throw rule(`unsupported state schema ${s.schema}; this adlc supports schema ${SCHEMA}`);
+  if (!s || typeof s !== 'object' || s.schema !== SCHEMA) throw rule(`unsupported state schema ${s && s.schema}; this adlc supports schema ${SCHEMA}`);
+  // A hand-edited or damaged state file gets a clear rule error here instead of an internal error later.
+  const problems = require('./schema').check('state', s);
+  if (problems.length) {
+    const shown = problems.slice(0, 10).map((x) => `- ${x}`).join('\n');
+    throw rule(`state.json does not match schemas/state.schema.json:\n${shown}${problems.length > 10 ? `\n- … ${problems.length - 10} more` : ''}\nRestore it from version control`);
+  }
   return s;
 }
 

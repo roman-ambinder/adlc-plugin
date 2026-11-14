@@ -17,7 +17,12 @@ Fixes from the 2026-11-14 review. All covered by `npm test`; not yet live-tested
 - The per-run task budget resets only in a session the hooks recorded, not for any `--session` value.
 - The guard also covers the Grep tool and more credential files (`.envrc`, `.npmrc`, `.netrc`, `.pypirc`, `.aws/credentials`, `*.p12`, `*.pfx`).
 
+- `state.json` and worker handoffs are validated against `schemas/*.json`. A damaged state file now gives a clear error (exit 2) naming the fields, instead of an internal error.
+
 ### Fixed
+- The guard no longer denies commands that only mention a user-only command (`grep "adlc approve" docs/`) or that ignore a failure of a non-check command with a check word in it (`mkdir -p build || true`).
+- CI runs once per pull request (pushes trigger it only on `main`), adds Node 24, uses `actions/checkout@v6` and `actions/setup-node@v6`, and pins Claude Code for manifest validation.
+- README: Windows is documented as unsupported; one active change per repository is documented.
 - Hooks now find the active change the same way the CLI does. A session opened in a subdirectory of the repository was unguarded and could not record approvals.
 - The reviewer, analyst and architect could write files through the shell; they are now denied like workers.
 - A refused `approve`, `skip` or `unblock` no longer uses up your prompt.

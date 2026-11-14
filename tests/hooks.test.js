@@ -316,3 +316,15 @@ test('guard denies the Grep tool on secret files and more secret file names', ()
   assert.equal(decision(hook('guard', bash('cat ~/.aws/credentials'), root)), 'deny');
   assert.match(fs.readFileSync(path.join(__dirname, '../plugins/adlc/hooks/hooks.json'), 'utf8'), /Bash\|Read\|Grep\|/);
 });
+
+test('guard does not deny commands that only mention adlc or a check word', () => {
+  const root = project();
+  for (const cmd of ['grep -rn "adlc approve" docs/', 'rg "adlc skip" README.md', 'echo use /adlc:approve plan', 'mkdir -p build || true', 'rm -rf coverage; true', 'cd build || exit 0']) {
+    assert.notEqual(decision(hook('guard', bash(cmd), root)), 'deny', cmd);
+  }
+  for (const cmd of [
+    'adlc approve plan', 'cd x && adlc skip design no', 'ADLC_ROOT=. adlc unblock go', 'node "/p/bin/adlc" approve plan',
+    'bash -c "adlc approve plan"', 'echo y | xargs adlc approve', 'npm test || true', 'pytest -q; exit 0', 'set +e; npm test',
+    'CI=1 npm run build || echo failed',
+  ]) assert.equal(decision(hook('guard', bash(cmd), root)), 'deny', cmd);
+});

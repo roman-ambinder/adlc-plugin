@@ -10,24 +10,12 @@ const { entriesOverlap } = require('./glob');
 const { hasStopped, leaseFor, endLease } = require('./dispatch');
 const { rule } = require('./errors');
 const wt = require('./worktree');
+const schema = require('./schema');
 
-const HANDOFF_STATUSES = ['done', 'blocked', 'partial'];
-
+// The handoff format is defined once, in schemas/handoff.schema.json.
 function validateHandoff(h) {
   if (!h || typeof h !== 'object' || Array.isArray(h)) return ['handoff must be a JSON object'];
-  const p = [];
-  const strList = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
-  if (typeof h.task !== 'string') p.push('task must be a string');
-  if (!HANDOFF_STATUSES.includes(h.status)) p.push(`status must be one of ${HANDOFF_STATUSES.join(', ')}`);
-  if (typeof h.workspace !== 'string' || !h.workspace) p.push('workspace must be a non-empty string');
-  if (!(h.branch === null || typeof h.branch === 'string')) p.push('branch must be a string or null');
-  for (const k of ['files_changed', 'interface_changes', 'blockers', 'out_of_scope']) if (!strList(h[k])) p.push(`${k} must be an array of strings`);
-  if (typeof h.summary !== 'string' || !h.summary.trim()) p.push('summary must be a non-empty string');
-  if (typeof h.integration_notes !== 'string') p.push('integration_notes must be a string');
-  if (!Array.isArray(h.checks) || h.checks.some((c) => !c || typeof c.cmd !== 'string' || !Number.isInteger(c.exit) || typeof c.evidence !== 'string')) {
-    p.push('checks must be an array of {cmd: string, exit: integer, evidence: string}');
-  }
-  return p;
+  return schema.check('handoff', h);
 }
 
 function handoffPath(root, id) {

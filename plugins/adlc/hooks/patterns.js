@@ -25,9 +25,13 @@ const removesLifecycleDir = (cmd) => LIFECYCLE_DIR.test(cmd) && DIR_MUTATING.tes
 // `adlc` may appear as a bare command or as a quoted path ending in bin/adlc, e.g. node "/x/bin/adlc" claim.
 // The subcommand may be quoted too (adlc "approve" plan).
 const ADLC = String.raw`\badlc['"]?\s+['"]?`;
-const USER_ONLY = new RegExp(`${ADLC}(approve|skip|unblock|archive)\\b`);
+// User-only commands are matched only where adlc is the command being run (start of the command, after ; & | ( $(,
+// after env/exec/xargs-style wrappers or inside sh -c "..."), so `grep "adlc approve" docs/` is not denied. Missing an
+// unusual form is safe: the CLI itself refuses these actions without the user's intent; the guard only explains early.
+const CMD_POS = String.raw`(?:^|[;&|(\n]|\$\(|\b(?:exec|command|env|sudo|xargs|time|nohup|timeout\s+\S+)\s|\b(?:ba|z|da)?sh\s+-c\s+['"])\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:node\s+)?(?:['"]?[^\s'";&|()]*\/)?`;
+const USER_ONLY = new RegExp(`${CMD_POS}${ADLC}(approve|skip|unblock|archive)\\b`);
 // Same as USER_ONLY, capturing the action and its first argument (gate or stage).
-const USER_ONLY_ARG = new RegExp(`${ADLC}(approve|skip|unblock|archive)\\b['"]?\\s*['"]?([^\\s'"]*)`);
+const USER_ONLY_ARG = new RegExp(`${CMD_POS}${ADLC}(approve|skip|unblock|archive)\\b['"]?\\s*['"]?([^\\s'"]*)`);
 const ADLC_SUBCOMMAND = new RegExp(`${ADLC}([a-z-]+)`, 'g');
 const WORKER_CLAIM = new RegExp(`${ADLC}worker\\s+claim\\s+['"]?(T\\d+)['"]?\\s+--lease\\s+['"]?(L-[0-9a-f]+)`);
 
@@ -61,10 +65,31 @@ const countTests = (text) => (String(text || '').match(TEST_DECL) || []).length;
 const { masksExitStatus } = require('../lib/masking');
 
 const CHECK_WORDS = String.raw`\b(test|tests|pytest|jest|vitest|mocha|tsc|eslint|ruff|mypy|lint|check|build|verify|make|cargo|phpunit|rspec|gradle|mvn|--test)\b`;
+// Commands whose failure is routinely ignored and that are never checks, even with a check word as an argument
+// (`mkdir -p build || true`, `rm -rf coverage; true`).
+const NOT_CHECKS = new Set(['mkdir', 'rm', 'rmdir', 'cp', 'mv', 'ln', 'touch', 'cd', 'pushd', 'popd', 'echo', 'printf', 'cat', 'ls', 'grep', 'rg', 'kill', 'pkill', 'killall', 'which', 'type', 'command', 'chmod', 'chown', 'docker', 'git', 'diff', 'find', 'wait', 'sleep', 'unset', 'export']);
+
+// True when a failing check's status is masked: `npm test || true`, `pytest; exit 0`, or `set +e` before a check.
+function masksCheck(cmd) {
+  const s = String(cmd);
+  if (!masksExitStatus(s)) return false;
+  if (/(^|[\s;&|(])set\s+\+e\b/.test(s)) return new RegExp(CHECK_WORDS).test(s);
+  const ops = [/\|\|\s*(true\b|:(\s|$|[;&|)])|exit\s+0\b|echo\b|printf\b)/g, /;\s*(true|:|exit\s+0)\s*($|[;&|)\n'"])/g];
+  for (const re of ops) {
+    for (const m of s.matchAll(re)) {
+      const segment = s.slice(0, m.index).split(/&&|\|\||[;|\n]/).pop().trim();
+      const words = segment.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*/, '').split(/\s+/);
+      if (NOT_CHECKS.has(words[0])) continue;
+      if (new RegExp(CHECK_WORDS).test(segment)) return true;
+    }
+  }
+  return false;
+}
+
 const CHECK_BYPASS = [
   /--no-verify\b/,
   // masking after a known check command, or anywhere in a command handed to `adlc run` (which would record a false exit 0)
-  { test: (cmd) => new RegExp(CHECK_WORDS).test(cmd) && masksExitStatus(cmd) },
+  { test: masksCheck },
   { test: (cmd) => /\badlc['"]?\s+run\b/.test(cmd) && masksExitStatus(cmd) },
 ];
 
@@ -92,4 +117,4 @@ function riskyKind(cmd, level = 'strict') {
   return null;
 }
 
-module.exports = { secretGlob, writesCliOwned, removesLifecycleDir, USER_ONLY_ARG, countTests, SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
+module.exports = { masksCheck, secretGlob, writesCliOwned, removesLifecycleDir, USER_ONLY_ARG, countTests, SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
