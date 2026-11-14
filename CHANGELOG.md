@@ -2,8 +2,25 @@
 
 ## Unreleased
 
+## 0.7.0 — 2026-11-14
+
+Ready for public use. A first-run test installed the plugin from GitHub into a fresh Claude Code setup and took a change from start to release; this release fixes what it found.
+
+### Added
+- **`/adlc:setup`** (user-only): sets up a project in one step. It shows what it will add to `.claude/settings.json` (the recommended permissions) and `.gitignore` (`.claude/worktrees/`), asks, and only adds: your own entries and keys are never changed or removed, and a rule you already set differently is skipped and reported. Backed by `adlc setup [--dry-run]`.
+- `adlc start` prints a tip to run `/adlc:setup` when the project is not set up yet.
+
+### Fixed
+- **Skills asked for permission to read the plugin's own files.** The plugin lives outside your project, so reading the coordinator rules or the review template prompted in every session (and stopped `claude -p` runs). Skills now load each other with the Skill tool, and the reviewer has its report format in its own instructions.
+- **Start stopped when plugin options were not saved.** The model saw the unfilled option text and asked what to do. The start skill now says to run the command as written; the defaults apply.
+- **Release stopped for a permission prompt.** `adlc summary` was missing from the settings template. The template now allows it, and `adlc start` too; a test checks every routine subcommand is allowed.
+
 ### Documentation
-- README: install from GitHub (`claude plugin marketplace add roman-ambinder/adlc-plugin`), pin a release with `#<tag>`, update, and set options with `/plugin configure` or `--config`.
+- New short README: why, a demo, a quickstart checked by the first-run test, cost (about $1.45 for a small change with Sonnet) and limits.
+- Reference material moved into `docs/`: installation, configuration, how it works, safety (with its limits), troubleshooting, development.
+- `docs/first-run-test.md` (the test log and costs) and `docs/interactive-checklist.md`.
+- `SECURITY.md`, `CONTRIBUTING.md`, issue and pull request templates. The owner is now `roman-ambinder`.
+- Install from GitHub, pin a release with `#<tag>`, update, and set options with `/plugin configure` or `--config`.
 
 ## 0.6.0 — 2026-11-14
 

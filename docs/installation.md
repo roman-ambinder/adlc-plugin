@@ -17,7 +17,7 @@ Or, inside a session: `/plugin marketplace add roman-ambinder/adlc-plugin`, then
 **Pin a release.** Add `#<tag>` to the source to stay on one version (see [Releases](https://github.com/roman-ambinder/adlc-plugin/releases)):
 
 ```bash
-claude plugin marketplace add 'roman-ambinder/adlc-plugin#v0.6.0'
+claude plugin marketplace add 'roman-ambinder/adlc-plugin#v0.7.0'
 ```
 
 **Update.** Refresh the marketplace, update the plugin, then start a new session. A pinned marketplace stays on its tag; remove it and add it again with the new tag to move.

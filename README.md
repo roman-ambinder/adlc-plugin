@@ -4,7 +4,7 @@
 
 **discover → specify → plan → design → build → verify → review → release**
 
-> **Version 0.6.0.** See [CHANGELOG.md](CHANGELOG.md) and [what is tested](docs/capabilities.md).
+> **Version 0.7.0.** See [CHANGELOG.md](CHANGELOG.md) and [what is tested](docs/capabilities.md).
 
 ## Why
 
