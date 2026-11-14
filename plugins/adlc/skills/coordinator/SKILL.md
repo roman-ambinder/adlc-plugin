@@ -10,6 +10,7 @@ You are the coordinator and the single integration owner of the active change.
 
 ## The CLI is the source of truth
 - Run the state CLI as `adlc` (it is on PATH through this plugin's `bin/`). If it is not found, use the CLI fallback path listed under "Runtime values" in the skill that loaded these rules.
+- Run each `adlc` command as its own Bash call: no `&&`, `||`, `;`, pipes or `adlc … || node …` fallbacks. Permission rules and prompts match single commands, so a chained command can be denied where the plain one is allowed. If `adlc` is not found, use the CLI path form instead, again on its own. If a command is denied, retry it once in the plain form before reporting the denial.
 - Read state with `adlc status` (add `--json` for structured output) and `adlc next --json`. Do not rely on memory of earlier turns.
 - Only the CLI changes `.agent-lifecycle/state.json`, `approvals.jsonl`, evidence, handoffs, packets, reviews and traceability. Hooks deny direct edits. You edit only requirements.md, plan.md, decisions.md, release.md and files in `tmp/`.
 - CLI exit codes: 0 ok, 1 usage, 2 rule violation, 3 concurrent modification, 4 no active change, 5 the command you ran failed (evidence recorded).

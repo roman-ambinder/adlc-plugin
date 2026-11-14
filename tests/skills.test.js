@@ -52,3 +52,21 @@ test('agents use only fields supported for plugin agents and least-privilege too
   assert.ok(!tools['analyst.md'].includes('Bash'));
   assert.ok(!tools['architect.md'].includes('Bash'));
 });
+
+test('start passes the user\'s arguments last, so a typed flag wins over plugin settings', () => {
+  const { spawnSync } = require('node:child_process');
+  const { tmpdir } = require('./helpers');
+  const line = read('skills/start/SKILL.md').split('\n').find((l) => l.trim().startsWith('adlc start'));
+  assert.match(line, /'\$\{user_config\.serial_globs\}' \$ARGUMENTS\s*$/);
+  // the CLI takes the last value of a repeated flag: simulate the skill line with saved settings and with unsaved ones
+  for (const saved of ['auto', '${user_config.parallel_mode}']) {
+    const root = tmpdir();
+    const r = spawnSync(process.execPath, [path.join(PLUGIN, 'bin', 'adlc'), 'start', '--parallel-mode', saved, 'x', '--parallel-mode', 'shared'], { cwd: root, encoding: 'utf8', env: { ...process.env, ADLC_ROOT: root } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(root, '.agent-lifecycle/state.json'), 'utf8')).execution.resolved_from, 'shared', saved);
+  }
+});
+
+test('worker and coordinator rules ask for one adlc command per Bash call', () => {
+  for (const name of ['worker-contract', 'coordinator']) assert.match(read(`skills/${name}/SKILL.md`), /each `adlc` command as its own Bash call/, name);
+});

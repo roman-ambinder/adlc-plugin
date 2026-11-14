@@ -9,10 +9,10 @@ Runtime values for this session (substituted by Claude Code when this skill load
 - CLI fallback if `adlc` is not on PATH: `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`
 - Session id for `adlc dispatch start --session`: `${CLAUDE_SESSION_ID}`
 
-1. Start the change (the configuration values come from the plugin's settings):
+1. Start the change. The configuration values come from the plugin's settings; the user's own arguments go last, so a flag they typed (for example `--parallel-mode shared`) wins:
 
    ```
-   adlc start $ARGUMENTS --approval-gates '${user_config.approval_gates}' --parallel-mode '${user_config.parallel_mode}' --max-parallel '${user_config.max_parallel}' --max-repair-attempts '${user_config.max_repair_attempts}' --max-tasks-per-run '${user_config.max_tasks_per_run}' --serial-globs '${user_config.serial_globs}'
+   adlc start --approval-gates '${user_config.approval_gates}' --parallel-mode '${user_config.parallel_mode}' --max-parallel '${user_config.max_parallel}' --max-repair-attempts '${user_config.max_repair_attempts}' --max-tasks-per-run '${user_config.max_tasks_per_run}' --serial-globs '${user_config.serial_globs}' $ARGUMENTS
    ```
 
    If it exits 2 because a change already exists, show `adlc status` and stop. If it exits 2 because reduced approval gates need the user's own request, tell the user to type `/adlc:start` themselves and stop; do not change the gates.
