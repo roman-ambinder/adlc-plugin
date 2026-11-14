@@ -62,3 +62,10 @@ test('community files exist and SECURITY.md points to private vulnerability repo
   assert.match(sec, /best-effort/);
   assert.match(read('README.md'), /\]\(SECURITY\.md\)/);
 });
+
+test('README shows the demo recording, labelled as scripted', () => {
+  const readme = read('README.md');
+  assert.match(readme, /!\[[^\]]*\]\(docs\/media\/demo\.svg\)/);
+  assert.match(readme, /scripted/i);
+  assert.ok(fs.statSync(path.join(REPO, 'docs', 'media', 'demo.svg')).size < 5 * 1024 * 1024);
+});

@@ -32,6 +32,18 @@ In an interactive session the same flow is:
 6. `/adlc:approve release`
 7. `/adlc:release` (completes the stage)
 
+## Demo recording
+
+`docs/media/demo.svg` is made from the end-to-end example:
+
+```bash
+node scripts/demo-cast.js /tmp/demo.cast
+```
+
+```bash
+npx --yes svg-term-cli --in /tmp/demo.cast --out docs/media/demo.svg --window --width 100 --height 30
+```
+
 ## Releasing
 
 Bump `version` in `plugins/adlc/.claude-plugin/plugin.json` and `package.json`, add a `## <version> — <date>` section to `CHANGELOG.md`, and merge to `main`. `.github/workflows/release.yml` runs the tests, tags the commit `v<version>` and publishes a GitHub release with that changelog section. It does nothing if the tag already exists, and can also be started by hand (workflow_dispatch).

@@ -19,6 +19,10 @@ It uses your repository's own test, lint and type-check commands, so it works wi
 
 ## Demo
 
+![A small change going through every adlc stage in a terminal](docs/media/demo.svg)
+
+*Scripted demo: the real `adlc` CLI and hooks, with the model's work replaced by fixed content so it runs the same way every time. It is made by [`scripts/demo-cast.js`](scripts/demo-cast.js).*
+
 See [`examples/slugify/run.sh`](examples/slugify/run.sh) for a full walkthrough of one small change through every stage, and [`examples/slugify/artifacts/`](examples/slugify/artifacts/) for the files it produces.
 
 ## Quickstart
