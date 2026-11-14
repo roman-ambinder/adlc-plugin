@@ -48,6 +48,22 @@ cd your-project && claude
 
 Pinning a release, updating and settings are under [Installation](#installation); every command is under [Commands](#commands).
 
+## See it work
+
+Real output from the live tests of 2026-11-14 (Claude Code 2.1.325, `claude -p`). Details are in [docs/capabilities.md](docs/capabilities.md).
+
+**A change from start to done.** Every stage completed or was skipped with a reason. Both gates were approved by the user. `adlc summary` shows where the time went.
+
+![adlc status and adlc summary after a finished change](docs/images/demo-status.png)
+
+**Approvals only count when you type them.** Asked in prose, the model tried `adlc approve plan`. The guard refused it, and the model asked the user to type the slash command. (The prompt, the denied command, the guard's message and the reply are real; the reply is shortened.)
+
+![A prose request to approve the plan is denied by the adlc guard](docs/images/demo-guard.png)
+
+**Parallel build in git worktrees.** Two independent tasks were built at the same time, each in its own worktree. They were merged with `--no-ff` only after the user ran the printed commit and merge commands.
+
+![Two tasks integrated from separate worktrees, with two merge commits](docs/images/demo-worktree.png)
+
 ## Architecture
 
 ```
@@ -98,6 +114,7 @@ adlc-plugin/
 ├── README.md
 ├── docs/
 │   ├── capabilities.md                  implemented / tested / unsupported
+│   ├── images/                          README screenshots
 │   └── superpowers/                     design spec and implementation plan
 ├── examples/slugify/
 │   ├── run.sh                           end-to-end walkthrough
