@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Security
+- **User intents could be forged.** Running `hooks/prompt-submit.js` by hand with a fake `/adlc:approve`, `/adlc:skip` or similar prompt recorded an intent the CLI accepted. The CLI now also requires the user's typed command in Claude Code's own session transcript, and each transcript entry authorises one action. The guard denies running adlc hook scripts by hand, writing to the transcripts, and setting `CLAUDE_CONFIG_DIR` on user-only commands. Found by a live test.
+
+### Fixed
+- Hooks looked for the active change in the process's working directory when the project directory had none, so a hook spawned elsewhere (for example by the plugin's own tests run inside a project) could record intents in an unrelated project. They now use only the project directory.
+- The start skill no longer worries the user about literal `${user_config.…}` text for unset settings.
+
 ### Documentation
 - README: a "See it work" section with three screenshots of real output from the live tests (a finished change, a refused prose approval, a parallel worktree build).
 - README: a Quick start section with install, project setup and the nine commands of one change.

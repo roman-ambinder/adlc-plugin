@@ -16,6 +16,12 @@ const MUTATING = /(^|[\s;&|(])(tee|rm|mv|cp|truncate|dd|chmod|ln|touch|install)\
 const LIFECYCLE_DIR = /(^|[\s'"=\/])\.agent-lifecycle\/?(?=$|[\s'";&|)])/i;
 const DIR_MUTATING = /(^|[\s;&|(])(rm|mv|rmdir|ln|chmod)\s/;
 
+// Running adlc's hook scripts by hand could fake what Claude Code reports (for example a user prompt).
+const HOOK_SCRIPT = /(^|[\s'"\/=])(prompt-submit|subagent-stop|session-start|guard|audit)\.js\b/;
+// Claude Code's session transcripts, which the CLI reads as proof of what the user typed.
+const TRANSCRIPTS = /\.claude\/projects(\/|\b)/;
+const writesTranscripts = (cmd) => TRANSCRIPTS.test(cmd) && (MUTATING.test(cmd) || shellWriteTargets(cmd).some((t) => TRANSCRIPTS.test(t)));
+
 function writesCliOwned(cmd) {
   if (shellWriteTargets(cmd).some((t) => CLI_OWNED.test(t))) return true;
   return CLI_OWNED.test(cmd) && MUTATING.test(cmd);
@@ -117,4 +123,4 @@ function riskyKind(cmd, level = 'strict') {
   return null;
 }
 
-module.exports = { masksCheck, secretGlob, writesCliOwned, removesLifecycleDir, USER_ONLY_ARG, countTests, SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
+module.exports = { HOOK_SCRIPT, writesTranscripts, masksCheck, secretGlob, writesCliOwned, removesLifecycleDir, USER_ONLY_ARG, countTests, SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };

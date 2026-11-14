@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const PLUGIN = path.join(__dirname, '..', 'plugins', 'adlc');
@@ -11,18 +12,40 @@ function tmpdir() {
   return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'adlc-test-')));
 }
 
+// A private Claude Code config dir for the tests: session transcripts live in <it>/projects/.
+const CONFIG = tmpdir();
+process.env.CLAUDE_CONFIG_DIR = CONFIG;
+
 function cleanEnv(extra = {}) {
   const env = { ...process.env };
   for (const k of Object.keys(env)) if (k.startsWith('CLAUDE_') || k.startsWith('ADLC_')) delete env[k];
-  return { ...env, ...extra };
+  return { ...env, CLAUDE_CONFIG_DIR: CONFIG, ...extra };
+}
+
+function transcriptFor(root) {
+  const dir = path.join(CONFIG, 'projects', 'tests');
+  fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, `${crypto.createHash('sha1').update(root).digest('hex')}.jsonl`);
+}
+
+// Plays Claude Code recording a slash command the user typed, the way it appears in a real session transcript.
+function typed(root, prompt) {
+  const t = transcriptFor(root);
+  const m = /^\s*\/(adlc:[a-z]+)\b\s*([\s\S]*)$/.exec(prompt);
+  if (m) {
+    const content = `<command-message>${m[1]}</command-message>\n<command-name>/${m[1]}</command-name>\n<command-args>${m[2].trim()}</command-args>`;
+    fs.appendFileSync(t, `${JSON.stringify({ type: 'user', uuid: crypto.randomUUID(), timestamp: new Date().toISOString(), message: { role: 'user', content } })}\n`);
+  }
+  return t;
 }
 
 const USER_ONLY = ['approve', 'skip', 'unblock', 'archive', 'cancel'];
 
 // Plays the user: submits the prompt the user would type, which the UserPromptSubmit hook turns into an intent.
 function userPrompt(root, prompt, extraEnv = {}) {
+  const transcript = typed(root, prompt);
   return spawnSync(process.execPath, [path.join(PLUGIN, 'hooks', 'prompt-submit.js')], {
-    input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt, session_id: 's-test' }), encoding: 'utf8', env: cleanEnv({ CLAUDE_PROJECT_DIR: root, ...extraEnv }),
+    input: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt, session_id: 's-test', transcript_path: transcript }), encoding: 'utf8', env: cleanEnv({ CLAUDE_PROJECT_DIR: root, ...extraEnv }),
   });
 }
 
@@ -73,4 +96,4 @@ function toBuild(root, taskList, { mode = 'sequential', approve = true } = {}) {
   }
 }
 
-module.exports = { userPrompt, PLUGIN, lib, tmpdir, cli, hook, ok, writeFile, toBuild, TASK, REQUIREMENTS };
+module.exports = { CONFIG, transcriptFor, typed, userPrompt, PLUGIN, lib, tmpdir, cli, hook, ok, writeFile, toBuild, TASK, REQUIREMENTS };

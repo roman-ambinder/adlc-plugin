@@ -38,8 +38,10 @@ function probeLog(input) {
   }
 }
 
+// Where to look for the active change: the project directory Claude Code passes to hooks, else the session cwd.
+// Only one of them: falling back from the project directory to another directory could find a different project.
 function startDirs(input) {
-  return [...new Set([process.env.CLAUDE_PROJECT_DIR, input.cwd, process.cwd()].filter(Boolean))].slice(0, 2);
+  return [process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd()];
 }
 
 // Returns null outside adlc projects so every hook stays silent there.
