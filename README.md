@@ -10,6 +10,44 @@ It is built for solo developers and small teams. It is language-agnostic: it use
 
 > **Version 0.6.0.** See [CHANGELOG.md](CHANGELOG.md). Build runs sequentially, in parallel in the **shared checkout**, or in parallel in **isolated git worktrees** (one per worker), depending on the plan and the repository. The chosen mode and the reasons are recorded in `plan.md`. See [docs/capabilities.md](docs/capabilities.md).
 
+## Quick start
+
+**1. Install (once).** Needs Claude Code ≥ 2.1.311, Node ≥ 18 and git, on macOS or Linux.
+
+```bash
+claude plugin marketplace add roman-ambinder/adlc-plugin
+```
+
+```bash
+claude plugin install adlc@adlc-marketplace
+```
+
+**2. Prepare the project (once per project).** Copy the entries from [`settings-template.json`](https://github.com/roman-ambinder/adlc-plugin/blob/main/plugins/adlc/settings-template.json) into the project's `.claude/settings.json`, so routine steps need fewer permission prompts. The project should be a git repository with at least one commit.
+
+**3. Start Claude Code in the project.** If it asks whether you trust the folder, say yes.
+
+```bash
+cd your-project && claude
+```
+
+**4. Run a change.** Type each command yourself: approvals only count when you type them.
+
+| Step | Type | What happens |
+|---|---|---|
+| 1 | `/adlc:start "Add X" --small` | Starts the change. `--small` skips discover and design; leave it out for bigger work |
+| 2 | `/adlc:plan` | Writes acceptance criteria and tasks, then stops for your review |
+| 3 | `/adlc:approve plan` | You approve the plan |
+| 4 | `/adlc:next` | Build: workers write the code and tests. Approve the commit or merge prompts if asked |
+| 5 | `/adlc:next` | Verify: runs the tests and checks |
+| 6 | `/adlc:next` | Review: an independent reviewer checks the code |
+| 7 | `/adlc:release` | Writes the release notes, then stops for your approval |
+| 8 | `/adlc:approve release` | You approve the release |
+| 9 | `/adlc:release` | Finishes the change |
+
+**Any time:** `/adlc:status` (where things stand), `/adlc:resume` (continue in a new session), `/adlc:cancel <reason>` (stop the change), `/adlc:archive` (clear a finished change to start a new one).
+
+Pinning a release, updating and settings are under [Installation](#installation); every command is under [Commands](#commands).
+
 ## Architecture
 
 ```
@@ -266,15 +304,7 @@ examples/slugify/run.sh
 
 The resulting artifacts are committed in [`examples/slugify/artifacts/`](examples/slugify/artifacts/).
 
-In an interactive session the same flow is:
-
-1. `/adlc:start "Add slugify utility" --small`
-2. `/adlc:plan`
-3. `/adlc:approve plan`
-4. `/adlc:next` (build), then `/adlc:next` again (verify), then once more (review)
-5. `/adlc:release`
-6. `/adlc:approve release`
-7. `/adlc:release` (completes the stage)
+In an interactive session the same flow is the one in [Quick start](#quick-start).
 
 ## Development
 
