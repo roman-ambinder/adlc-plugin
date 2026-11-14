@@ -230,3 +230,5 @@ The plugin was installed from GitHub into an empty Claude Code config and used o
 
 `/adlc:setup` (`lib/setup.js`) is tested by `tests/setup.test.js`: fresh project, dry run, keeping existing entries, skipping clashing rules, invalid settings, `.gitignore` variants, running from a subdirectory.
 
+
+**Post-release check (v0.7.0, 2026-11-14).** Installed with `claude plugin marketplace add 'roman-ambinder/adlc-plugin#v0.7.0'` into an empty Claude Code config: version 0.7.0, 16 skills including `setup`; `adlc setup --dry-run` in a new repository listed the template entries. No model calls. The maintainer's interactive checklist ([interactive-checklist.md](interactive-checklist.md)) results are not yet recorded.
