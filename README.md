@@ -139,7 +139,7 @@ claude --plugin-dir /path/to/adlc-plugin/plugins/adlc
 
 After changing plugin files, run `/reload-plugins` or start a new session.
 
-**Recommended project permissions:** copy the entries from [`plugins/adlc/settings-template.json`](https://github.com/roman-ambinder/adlc-plugin/blob/main/plugins/adlc/settings-template.json) into your project's `.claude/settings.json`. A plugin cannot ship permission rules itself. The template:
+**Recommended project permissions:** run `/adlc:setup` in your project. It shows what it will add to `.claude/settings.json` and `.gitignore`, asks you, and never removes your own settings. A plugin cannot ship permission rules itself. You can also copy the entries from [`plugins/adlc/settings-template.json`](https://github.com/roman-ambinder/adlc-plugin/blob/main/plugins/adlc/settings-template.json) by hand. The template:
 - allows the routine `adlc` subcommands without a prompt;
 - keeps commits, pushes, PRs, installs and publishing on `ask`;
 - denies the Read tool on `.env`, keys and similar files (the guard hook also blocks them in Bash commands and Read calls).
@@ -307,7 +307,7 @@ npm run validate
 | Task blocked after repeated failures | Read its evidence and handoff, decide the approach, then `/adlc:unblock "<note>" --task T<n>` |
 | Hooks seem inactive | Hooks act when `.agent-lifecycle/state.json` exists in the project directory or a parent of it (the same lookup as the CLI). Check `/plugin` → Errors, and `claude --debug` |
 | Need to see what hooks receive | Start Claude Code with `ADLC_HOOK_LOG=/tmp/adlc-hooks.jsonl` to log hook metadata (never tool input) |
-| Too many permission prompts | Copy `plugins/adlc/settings-template.json` entries into `.claude/settings.json`. Guard `ask` prompts for risky commands remain by design |
+| Too many permission prompts | Run `/adlc:setup` (or copy `plugins/adlc/settings-template.json` entries into `.claude/settings.json` by hand). Guard `ask` prompts for risky commands remain by design |
 
 ## License
 

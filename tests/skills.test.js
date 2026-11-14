@@ -34,7 +34,7 @@ test('user_config values reach the shell single-quoted', () => {
 });
 
 test('approve, skip, unblock and archive are user-only; coordinator and worker-contract are model-only', () => {
-  for (const name of ['approve', 'skip', 'unblock', 'archive', 'cancel']) assert.match(frontmatter(read(`skills/${name}/SKILL.md`)), /disable-model-invocation: true/, name);
+  for (const name of ['approve', 'skip', 'unblock', 'archive', 'cancel', 'setup']) assert.match(frontmatter(read(`skills/${name}/SKILL.md`)), /disable-model-invocation: true/, name);
   for (const name of ['coordinator', 'worker-contract']) assert.match(frontmatter(read(`skills/${name}/SKILL.md`)), /user-invocable: false/, name);
 });
 
@@ -69,4 +69,14 @@ test('start passes the user\'s arguments last, so a typed flag wins over plugin 
 
 test('worker and coordinator rules ask for one adlc command per Bash call', () => {
   for (const name of ['worker-contract', 'coordinator']) assert.match(read(`skills/${name}/SKILL.md`), /each `adlc` command as its own Bash call/, name);
+});
+
+test('setup skill runs a dry run before writing, and the template does not pre-allow setup', () => {
+  const text = read('skills/setup/SKILL.md');
+  const dry = text.indexOf('adlc setup --dry-run');
+  const apply = text.search(/adlc setup\s*$/m);
+  assert.ok(dry >= 0 && apply > dry, 'dry run comes before applying');
+  assert.match(text, /node "\$\{CLAUDE_PLUGIN_ROOT\}\/bin\/adlc"/);
+  const tpl = JSON.parse(read('settings-template.json'));
+  assert.ok(!tpl.permissions.allow.some((e) => /adlc setup/.test(e)));
 });
