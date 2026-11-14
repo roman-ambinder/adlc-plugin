@@ -1,23 +1,41 @@
 'use strict';
 
-// Files only the adlc CLI (state.json, approvals.jsonl) or hooks (runs/) may write.
-const PROTECTED_PATH = /^\.agent-lifecycle\/(state\.json|approvals\.jsonl|runs\/)/;
+// Everything under .agent-lifecycle/ is written only by the adlc CLI or hooks, except the four documents people and
+// agents edit and the tmp/ scratch area. Evidence, handoffs, packets, reviews and traceability are therefore not forgeable
+// with the file tools. Case-insensitive, because macOS and Windows file systems usually are.
+const PROTECTED_PATH = /^\.agent-lifecycle(\/(?!(requirements|plan|decisions|release)\.md$|tmp\/)|$)/i;
 const PROTECTED_IN_CMD = /\.agent-lifecycle\/(state\.json|approvals\.jsonl|runs\/)/;
 // Bare names (e.g. after `cd .agent-lifecycle`): may be another project file, so these only ask.
 const MANAGED_NAME_IN_CMD = /(^|[\s/'"])(state\.json|approvals\.jsonl|bindings\.json|stops\.jsonl|writes\.jsonl|audit\.jsonl)\b|(^|[\s'"])runs\//;
 const WRITE_OPS = /(>|\btee\b|\bsed\s+-i|\brm\b|\bmv\b|\bcp\b|\btruncate\b|\bdd\b|\bpython3?\b|\bnode\b|\bperl\b|\bruby\b|\bchmod\b|\bln\b)/;
 
+// CLI-written records (evidence, handoffs, packets, reviews, ...) named in a shell command.
+const CLI_OWNED = /\.agent-lifecycle\/((test-results|handoffs|packets|reviews|archive)\/|(traceability|handoff)\.md)/i;
+const MUTATING = /(^|[\s;&|(])(tee|rm|mv|cp|truncate|dd|chmod|ln|touch|install)\s|\bsed\s+(-[a-zA-Z]*\s+)*-i/;
+// The lifecycle directory itself: removing, renaming or replacing it switches every hook off.
+const LIFECYCLE_DIR = /(^|[\s'"=\/])\.agent-lifecycle\/?(?=$|[\s'";&|)])/i;
+const DIR_MUTATING = /(^|[\s;&|(])(rm|mv|rmdir|ln|chmod)\s/;
+
+function writesCliOwned(cmd) {
+  if (shellWriteTargets(cmd).some((t) => CLI_OWNED.test(t))) return true;
+  return CLI_OWNED.test(cmd) && MUTATING.test(cmd);
+}
+const removesLifecycleDir = (cmd) => LIFECYCLE_DIR.test(cmd) && DIR_MUTATING.test(cmd);
+
 // `adlc` may appear as a bare command or as a quoted path ending in bin/adlc, e.g. node "/x/bin/adlc" claim.
-const ADLC = String.raw`\badlc['"]?\s+`;
-const USER_ONLY = new RegExp(`${ADLC}(approve|skip|unblock)\\b`);
+// The subcommand may be quoted too (adlc "approve" plan).
+const ADLC = String.raw`\badlc['"]?\s+['"]?`;
+const USER_ONLY = new RegExp(`${ADLC}(approve|skip|unblock|archive)\\b`);
 // Same as USER_ONLY, capturing the action and its first argument (gate or stage).
-const USER_ONLY_ARG = new RegExp(`${ADLC}(approve|skip|unblock)\\b\\s*['"]?([^\\s'"]*)`);
+const USER_ONLY_ARG = new RegExp(`${ADLC}(approve|skip|unblock|archive)\\b['"]?\\s*['"]?([^\\s'"]*)`);
 const ADLC_SUBCOMMAND = new RegExp(`${ADLC}([a-z-]+)`, 'g');
 const WORKER_CLAIM = new RegExp(`${ADLC}worker\\s+claim\\s+['"]?(T\\d+)['"]?\\s+--lease\\s+['"]?(L-[0-9a-f]+)`);
 
 // Secret-bearing files (the settings template denies the same set for the Read tool).
-const SECRET_FILE = /(^|\/)(\.env(\.(?!example\b|sample\b|template\b|dist\b)[\w.-]+)?|[^\/\s'"]+\.(pem|key)|id_(rsa|dsa|ecdsa|ed25519)[\w.-]*)$/;
-const SECRET_IN_CMD = /(^|[\s'"=<\/])(\.env(\.(?!example\b|sample\b|template\b|dist\b)[\w.-]+)?|[^\s'"\/]+\.(pem|key)|id_(rsa|dsa|ecdsa|ed25519)[\w.-]*)(?=$|[\s'";&|)])/;
+const SECRET_FILE = /(^|\/)(\.env(\.(?!example\b|sample\b|template\b|dist\b)[\w.-]+)?|\.envrc|\.npmrc|\.netrc|\.pypirc|\.aws\/credentials|[^\/\s'"]+\.(pem|key|p12|pfx)|id_(rsa|dsa|ecdsa|ed25519)[\w.-]*)$/;
+const SECRET_IN_CMD = /(^|[\s'"=<\/])(\.env(\.(?!example\b|sample\b|template\b|dist\b)[\w.-]+)?|\.envrc|\.npmrc|\.netrc|\.pypirc|\.aws\/credentials|[^\s'"\/]+\.(pem|key|p12|pfx)|id_(rsa|dsa|ecdsa|ed25519)[\w.-]*)(?=$|[\s'";&|)])/;
+// A Grep glob such as ".env*" or "*.pem" that selects secret files.
+const secretGlob = (glob) => [String(glob).replace(/[*?]/g, ''), String(glob).replace(/\*+|\?/g, 'x')].some((g) => SECRET_FILE.test(g));
 const READ_VERBS = /(^|[\s;&|(])(cat|less|more|head|tail|grep|egrep|rg|ag|sed|awk|cp|source|\.|xxd|od|strings|base64|bat|nl|tac|sort|diff|cut|tr|openssl)\s/;
 
 // Inline interpreter code (`python -c`, `node -e`, ...) can write any file without a visible target.
@@ -74,4 +92,4 @@ function riskyKind(cmd, level = 'strict') {
   return null;
 }
 
-module.exports = { USER_ONLY_ARG, countTests, SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };
+module.exports = { secretGlob, writesCliOwned, removesLifecycleDir, USER_ONLY_ARG, countTests, SECRET_FILE, SECRET_IN_CMD, READ_VERBS, INLINE_CODE, PROTECTED_PATH, PROTECTED_IN_CMD, MANAGED_NAME_IN_CMD, WRITE_OPS, USER_ONLY, ADLC_SUBCOMMAND, WORKER_CLAIM, shellWriteTargets, SHELL_WRITE_OK, TEST_FILE, TEST_DISABLE, CHECK_BYPASS, RISKY, riskyKind };

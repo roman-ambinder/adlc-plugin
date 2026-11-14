@@ -15,7 +15,7 @@ Runtime values for this session (substituted by Claude Code when this skill load
    adlc start $ARGUMENTS --approval-gates '${user_config.approval_gates}' --parallel-mode '${user_config.parallel_mode}' --max-parallel '${user_config.max_parallel}' --max-repair-attempts '${user_config.max_repair_attempts}' --max-tasks-per-run '${user_config.max_tasks_per_run}' --serial-globs '${user_config.serial_globs}'
    ```
 
-   If it exits 2 because a change already exists, show `adlc status` and stop.
+   If it exits 2 because a change already exists, show `adlc status` and stop. If it exits 2 because reduced approval gates need the user's own request, tell the user to type `/adlc:start` themselves and stop; do not change the gates.
 2. If the next stage is `discover`: run `adlc stage start discover`, then delegate to the `adlc:analyst` subagent:
    "Discover stage for change <id>: <title>. Clarify the problem, users, constraints and success criteria. Read the repository as needed. Write the Problem, Users, Constraints and Success criteria sections of .agent-lifecycle/requirements.md. End your reply with at most five open questions that block specification."
 3. Show the user the analyst's summary and open questions. Ask only the questions that block. Record the answers in requirements.md.

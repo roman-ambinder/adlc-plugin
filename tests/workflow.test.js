@@ -219,14 +219,20 @@ test('a new session resets the per-run task budget', () => {
   s.leases[0].status = 'returned';
   s.tasks[0].status = 'integrated';
   assert.throws(() => dispatch.startDispatch(root, s, 'T2', { session: 'a' }), /task budget/);
+  // an invented session id does not reset the budget; only the session the hooks recorded does
+  assert.throws(() => dispatch.startDispatch(root, s, 'T2', { session: 'b' }), /task budget/);
+  fsu.appendLine(path.join(st.paths(root).runs, 'sessions.jsonl'), { session: 'b' });
+  assert.throws(() => dispatch.startDispatch(root, s, 'T2', { session: 'c' }), /task budget/);
   dispatch.startDispatch(root, s, 'T2', { session: 'b' });
   assert.equal(s.budget.tasks_this_run, 1);
 });
 
-test('lease lost repairs the task; lease stopped needs a note', () => {
+test('lease lost repairs the task; lease stopped needs the worker\'s handoff and a note', () => {
   const { root, s } = planned([TASK()]);
   const lease = dispatch.startDispatch(root, s, 'T1', { session: 's' });
-  assert.throws(() => dispatch.confirmStopped(s, lease.lease, ''), (e) => e.exitCode === 1);
+  assert.throws(() => dispatch.confirmStopped(root, s, lease.lease, 'looks finished'), /no handoff from this dispatch/);
+  writeFile(root, '.agent-lifecycle/handoffs/T1.json', '{}');
+  assert.throws(() => dispatch.confirmStopped(root, s, lease.lease, ''), (e) => e.exitCode === 1);
   assert.equal(dispatch.markLost(s, lease.lease, 'workspace empty'), 'todo');
   assert.equal(s.tasks[0].attempts, 1);
   assert.throws(() => dispatch.markLost(s, lease.lease, 'again'), /already lost/);
@@ -266,7 +272,7 @@ test('integrate check reports missing stop record and out-of-scope writes', () =
   const p = integrate.integrateCheck(root, s, 'T1').problems;
   assert.ok(p.some((x) => /no SubagentStop record/.test(x)));
   assert.ok(p.includes("changed files outside T1's writable set: README.md"));
-  dispatch.confirmStopped(s, s.leases[0].lease, 'foreground worker returned');
+  dispatch.confirmStopped(root, s, s.leases[0].lease, 'foreground worker returned');
   assert.ok(!integrate.integrateCheck(root, s, 'T1').problems.some((x) => /SubagentStop/.test(x)));
 });
 
@@ -320,4 +326,25 @@ test('integrate check flags files outside every task written after dispatch, but
   assert.ok(r.problems.some((x) => /sneaky\.js/.test(x) && !/old-note|coverage/.test(x)), r.problems.join('\n'));
   assert.ok(r.warnings.some((x) => /old-note\.txt/.test(x)));
   assert.ok(r.warnings.some((x) => /coverage\/lcov\.info/.test(x)), 'check output only warns');
+});
+
+test('verify needs the approved task checks, not just any passing command', () => {
+  const { root, s } = planned([TASK({ checks: ['node --version'] })]);
+  s.stages.verify = { status: 'in_progress', started: '2000-01-01T00:00:00.000Z' };
+  evidence.run(root, { stage: 'verify', cmd: ['echo ok'], cwd: root });
+  assert.match(rules.completeProblems(root, s, 'verify').join('\n'), /approved task check "node --version" has not been run in this verify stage/);
+  evidence.run(root, { stage: 'build', cmd: ['node --version'], cwd: root });
+  assert.equal(rules.completeProblems(root, s, 'verify').length, 1, 'build-stage evidence does not count');
+  evidence.run(root, { stage: 'verify', cmd: ['node --version'], cwd: root });
+  assert.deepEqual(rules.completeProblems(root, s, 'verify'), []);
+});
+
+test('review findings are counted from the report', () => {
+  const report = (blocking, optional = '') => `# Review\n\n## Blocking findings\n\n${blocking}\n\n## Optional improvements\n\n${optional}\n\n## Requirement coverage\n\n- [B9] not a finding here\n`;
+  assert.deepEqual(rules.reviewCounts(report('None.', '- [O1] a.js:1 — x\n- [O2] a.js:2 — y')), { blocking: 0, optional: 2, problems: [] });
+  assert.equal(rules.reviewCounts(report('- [B1] a.js:1 — broken\n- [B2] b.js:2 — unsafe')).blocking, 2);
+  assert.equal(rules.reviewCounts(report('_template hint_\n- [B1] a.js:1 — broken')).blocking, 1);
+  assert.match(rules.reviewCounts(report('There is a serious problem in a.js.')).problems[0], /must hold/);
+  assert.match(rules.reviewCounts(report('')).problems[0], /must hold/);
+  assert.match(rules.reviewCounts('# Review\n\nLooks good.\n').problems[0], /no "## Blocking findings" section/);
 });

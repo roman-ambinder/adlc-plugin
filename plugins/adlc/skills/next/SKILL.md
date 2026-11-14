@@ -10,7 +10,7 @@ Runtime values for this session (substituted by Claude Code when this skill load
 
 1. Run `adlc next --json`.
    - `blocked`: report the blocker and stop.
-   - `done`: report that the change is complete and suggest `adlc archive` when the user is ready.
+   - `done`: report that the change is complete and suggest `/adlc:archive` when the user is ready (only the user can archive).
    - `start` with `problems` (for example a plan gate that is not approved): report them and stop.
 2. By stage:
    - `discover`, `specify`, `plan`, `design`: follow `${CLAUDE_PLUGIN_ROOT}/skills/start/SKILL.md` or `${CLAUDE_PLUGIN_ROOT}/skills/plan/SKILL.md`.

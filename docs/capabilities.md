@@ -23,6 +23,25 @@ Status as of version 0.4.0 (Slices 1–3 plus the 2026-11-13 review follow-up), 
 | Audit, SubagentStop and SessionStart hooks; silence outside adlc projects | `hooks/*.js` | `tests/hooks.test.js` |
 | End-to-end walkthrough of one feature through every stage, using real CLI and hook scripts | `examples/slugify/run.sh` | `tests/e2e.test.js` |
 
+## Hardening after the 2026-11-14 review (tested by `npm test`, not live-tested)
+
+| Capability | Where | Evidence |
+|---|---|---|
+| Everything the CLI writes under `.agent-lifecycle/` (evidence, handoffs, packets, reviews, traceability, handoff notes, archive) is denied to the file tools and to shell redirects, `cp`, `mv`, `rm`, `sed -i`; only `requirements.md`, `plan.md`, `decisions.md`, `release.md` and `tmp/` stay editable. Paths are matched case-insensitively | `hooks/patterns.js`, `hooks/guard.js` | `tests/hooks.test.js` |
+| Removing, moving or relinking `.agent-lifecycle/` is denied; `adlc archive` is user-only | `hooks/patterns.js`, `lib/cli.js`, `skills/archive` | `tests/hooks.test.js`, `tests/cli.test.js` |
+| No terminal exception for user-only commands; a quoted subcommand (`adlc "approve"`) is recognised by the guard | `lib/userintent.js`, `hooks/patterns.js` | `tests/cli.test.js`, `tests/hooks.test.js` |
+| An approval intent carries the gate hash taken when the user typed the command; a later edit is refused. A refused action leaves the intent usable | `hooks/prompt-submit.js`, `lib/cli.js` | `tests/cli.test.js` |
+| Starting with fewer gates than `plan,release` needs the user's own `/adlc:start` | `lib/userintent.js`, `lib/cli.js` | `tests/cli.test.js` |
+| Hooks find the change the same way the CLI does (nearest parent directory with state), so a session opened in a subdirectory is guarded | `lib/state.js`, `hooks/common.js` | `tests/cli.test.js` |
+| The reviewer, analyst and architect are denied shell writes, like workers | `hooks/guard.js` | `tests/hooks.test.js` |
+| Verify needs every approved task check to pass in the verify stage | `lib/rules.js` | `tests/workflow.test.js` |
+| Review findings are counted from the report (`[B<n>]`, `[O<n>]`); flags that disagree are refused | `lib/rules.js`, `lib/cli.js` | `tests/workflow.test.js`, `tests/cli.test.js` |
+| The release gate hash covers the code through a git tree id of the working tree (throwaway index; `no-git` outside a repository) | `lib/worktree.js`, `lib/gates.js` | `tests/cli.test.js` |
+| The Grep tool is guarded for secret files; `.envrc`, `.npmrc`, `.netrc`, `.pypirc`, `.aws/credentials`, `*.p12`, `*.pfx` are covered | `hooks/patterns.js`, `hooks/hooks.json` | `tests/hooks.test.js` |
+| `adlc lease stopped` needs the worker's handoff from that dispatch; the task budget resets only for the session the hooks last recorded | `lib/dispatch.js`, `hooks/common.js` | `tests/workflow.test.js`, `tests/cli.test.js` |
+
+Known limits of these: a Grep over a whole directory can still match text inside a secret file; the coordinator still passes the reviewer's report to the CLI, so the report's wording is trusted; outside git the release hash does not cover code. Shell indirection (scripts, variables) remains best-effort, as before.
+
 ## Live smoke test (2026-11-13, Claude Code 2.1.311, `claude -p --plugin-dir`, Sonnet)
 
 Run against a scratch repository seeded at the build stage. Two `/adlc:next` runs cost $0.31 and $0.18.
@@ -116,8 +135,8 @@ Implemented, tested (`tests/worktree.test.js`, which uses real `git worktree`s) 
 |---|---|
 | A plugin cannot ship permission rules | `settings-template.json` to copy into `.claude/settings.json`; guard hook `deny`/`ask` |
 | `permissionMode`, `hooks`, `mcpServers` and `initialPrompt` are ignored in plugin agents | Plugin-level hooks plus per-agent `tools` allowlists |
-| Hooks cannot tell whether a Bash command came from the user's request or the model | User-only skills use `disable-model-invocation: true`. The `UserPromptSubmit` hook, which sees only prompts the user submits, records an intent when the user types `/adlc:approve`, `/adlc:skip` or `/adlc:unblock`; the CLI and guard require a matching, unexpired, unused intent (or a terminal). Live-verified 2026-11-13: a prose request to run `adlc approve plan` was blocked, and the slash command approved once. A command written by a shell script to `runs/` is still the best-effort Bash limit |
-| A plugin cannot set `worktree.baseRef` | Worktree mode (when implemented) requires the user to set it; `auto` will not select worktree mode without it |
+| Hooks cannot tell whether a Bash command came from the user's request or the model | User-only skills use `disable-model-invocation: true`. The `UserPromptSubmit` hook, which sees only prompts the user submits, records an intent when the user types `/adlc:approve`, `/adlc:skip` or `/adlc:unblock`; the CLI and guard require a matching, unexpired, unused intent (there is no terminal exception; a pseudo-terminal would defeat it). Live-verified 2026-11-13: a prose request to run `adlc approve plan` was blocked, and the slash command approved once. A command written by a shell script to `runs/` is still the best-effort Bash limit |
+| A plugin cannot set `worktree.baseRef` | Worktree mode requires the user to set it; `auto` will not select worktree mode without it |
 | File writes made through the Bash tool cannot be attributed at write time | Detected afterwards by `integrate check`, using `git status` and the handoff's file list |
 | Token use and cost are not observable from hooks | Recorded as `"not observable"`; the controls are `maxTurns`, the task budget and repair limits |
 | `bin/` prevents installation on claude.ai and Cowork | Claude Code CLI and desktop only |
@@ -131,5 +150,5 @@ Implemented, tested (`tests/worktree.test.js`, which uses real `git worktree`s) 
 - The reviewer agent has no Write or Edit tools. The coordinator saves the reviewer's report unchanged and records it with `adlc review add`.
 - The spec's binding probe (`adlc probe`, §6.7) was not built; it is unnecessary given documented and live-confirmed `agent_id` (see above).
 - Workers must run `adlc worker claim` before writing in every mode, not only in parallel modes, so every worker write is attributed.
-- `adlc task update`, `adlc lease stopped`, `adlc trace` and `adlc archive` were added during implementation.
+- `adlc task update`, `adlc lease stopped`, `adlc trace` and `adlc archive` were added during implementation. `adlc archive` is user-only (`/adlc:archive`).
 - Tests for Tasks 4–11 were written alongside the code rather than strictly before it.

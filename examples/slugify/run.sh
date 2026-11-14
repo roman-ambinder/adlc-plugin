@@ -166,8 +166,9 @@ adlc run --stage build -- "node --test test/slugify.test.js"
 adlc integrate done T1
 adlc stage complete build
 
-say "7. Verify (full suite through adlc run)"
+say "7. Verify (the approved task checks and the full suite, through adlc run)"
 adlc stage start verify
+adlc run --stage verify -- "node --test test/slugify.test.js"
 adlc run --stage verify -- "npm test"
 adlc stage complete verify
 

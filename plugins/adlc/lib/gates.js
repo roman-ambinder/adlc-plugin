@@ -6,6 +6,7 @@ const { sha256, appendLine, readJsonLines } = require('./fsutil');
 const { canonicalTasks } = require('./tasks');
 const { current } = require('./stages');
 const { usage, rule } = require('./errors');
+const { codeFingerprint } = require('./worktree');
 
 const GATES = ['plan', 'release'];
 
@@ -33,6 +34,8 @@ function gateMaterial(root, s, gate) {
       `## release.md\n${read(path.join(dir, 'release.md'))}`,
       `## traceability.md\n${read(path.join(dir, 'traceability.md'))}`,
       `## review\n${last ? read(path.join(dir, last.file)) : ''}`,
+      // The code being released: a change to any tracked or untracked (not ignored) file makes the approval stale.
+      `## code\n${codeFingerprint(root)}`,
     ].join('\n');
   }
   throw usage(`unknown gate "${gate}" (gates: ${GATES.join(', ')})`);

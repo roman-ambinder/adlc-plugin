@@ -128,8 +128,11 @@ test('handoff notes are appended with secrets redacted, and archive needs done o
 test('start takes settings from the flag, then CLAUDE_PLUGIN_OPTION_*, ignoring unsubstituted placeholders', () => {
   const { spawnSync } = require('node:child_process');
   const bin = path.join(__dirname, '../plugins/adlc/bin/adlc');
+  const { userPrompt } = require('./helpers');
   const run = (args, env) => {
     const root = tmpdir();
+    // reduced gates need the user's own /adlc:start; the hook sees the same plugin settings
+    userPrompt(root, `/adlc:start x ${args.join(' ')}`, env);
     const r = spawnSync('node', [bin, 'start', 'x', ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, ADLC_ROOT: root, ...env } });
     assert.equal(r.status, 0, r.stderr);
     const st = JSON.parse(fs.readFileSync(path.join(root, '.agent-lifecycle/state.json'), 'utf8'));
@@ -175,4 +178,123 @@ test('an intent expires after fifteen minutes and is ignored outside adlc projec
   const { userPrompt } = require('./helpers');
   assert.equal(userPrompt(bare, '/adlc:approve plan').status, 0);
   assert.equal(fs.existsSync(path.join(bare, '.agent-lifecycle')), false);
+});
+
+test('reduced approval gates need the user\'s own /adlc:start', () => {
+  const { userPrompt } = require('./helpers');
+  const root = tmpdir();
+  const r = cli(root, ['start', 'x', '--approval-gates', 'none']);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /approval gates reduced to "none"/);
+  assert.equal(fs.existsSync(path.join(root, '.agent-lifecycle/state.json')), false);
+  // a prompt that asks for other gates does not cover it
+  userPrompt(root, '/adlc:start x --approval-gates plan');
+  assert.equal(cli(root, ['start', 'x', '--approval-gates', 'none']).status, 2);
+  userPrompt(root, '/adlc:start x --approval-gates none');
+  ok(cli(root, ['start', 'x', '--approval-gates', 'none']));
+  // full gates never need an intent
+  ok(cli(tmpdir(), ['start', 'y', '--approval-gates', 'release,plan']));
+});
+
+test('an approval covers what the user saw: edits after the prompt are refused and the prompt stays usable', () => {
+  const { userPrompt } = require('./helpers');
+  const root = tmpdir();
+  toBuild(root, [TASK()], { approve: false });
+  const asModel = (args) => cli(root, args, { asModel: true });
+  userPrompt(root, '/adlc:approve plan');
+  const plan = path.join(root, '.agent-lifecycle/plan.md');
+  const before = fs.readFileSync(plan, 'utf8');
+  fs.writeFileSync(plan, `${before}\nsneaked in after the prompt\n`);
+  const r = asModel(['approve', 'plan']);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /changed after the user typed/);
+  // nothing was consumed: with the files back as the user saw them, the same prompt still approves once
+  fs.writeFileSync(plan, before);
+  assert.equal(asModel(['approve', 'plan']).status, 0);
+  assert.equal(asModel(['approve', 'plan']).status, 2);
+});
+
+test('a refused action does not use up the user\'s prompt, and there is no terminal shortcut', () => {
+  const { userPrompt } = require('./helpers');
+  const root = tmpdir();
+  ok(cli(root, ['start', 'x']));
+  const asModel = (args) => cli(root, args, { asModel: true });
+  userPrompt(root, '/adlc:skip build no');
+  assert.equal(asModel(['skip', 'build', 'no']).status, 2, 'build cannot be skipped');
+  assert.ok(lib('userintent').pending(root, 'skip', 'build'), 'intent still pending');
+  assert.equal(asModel(['archive', '--force']).status, 2, 'archive is user-only');
+  assert.equal(lib('userintent').humanAtTerminal, undefined);
+  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '../plugins/adlc/lib/userintent.js'), 'utf8'), /isTTY/);
+});
+
+test('hooks and the CLI agree on the root when the session starts in a subdirectory', () => {
+  const { hook } = require('./helpers');
+  const root = tmpdir();
+  ok(cli(root, ['start', 'x']));
+  const sub = path.join(root, 'packages/app');
+  fs.mkdirSync(sub, { recursive: true });
+  const input = { hook_event_name: 'PreToolUse', tool_name: 'Write', cwd: sub, tool_input: { file_path: path.join(root, '.agent-lifecycle/state.json'), content: '{}' } };
+  const r = hook('guard', input, sub);
+  assert.match(r.stdout, /"permissionDecision":"deny"/);
+  const p = require('./helpers').userPrompt(sub, '/adlc:unblock go on');
+  assert.equal(p.status, 0);
+  assert.ok(lib('userintent').pending(root, 'unblock'));
+});
+
+test('review add takes its counts from the report and rejects flags that disagree', () => {
+  const root = tmpdir();
+  ok(cli(root, ['start', 'x']));
+  const state = path.join(root, '.agent-lifecycle/state.json');
+  const s = JSON.parse(fs.readFileSync(state, 'utf8'));
+  for (const x of ['discover', 'specify', 'plan', 'design', 'build', 'verify']) s.stages[x] = { status: 'completed' };
+  s.stages.review = { status: 'in_progress', started: s.updated };
+  fs.writeFileSync(state, JSON.stringify(s));
+  const f = writeFile(root, '.agent-lifecycle/tmp/review.md', '# Review\n\n## Blocking findings\n\n- [B1] src/a.js:3 — wrong result\n\n## Optional improvements\n\n- [O1] src/a.js:9 — naming\n');
+  const lied = cli(root, ['review', 'add', '--file', f, '--blocking', '0', '--optional', '1']);
+  assert.equal(lied.status, 2);
+  assert.match(lied.stderr, /--blocking 0 does not match the report, which lists 1/);
+  assert.match(ok(cli(root, ['review', 'add', '--file', f])), /1 blocking, 1 optional/);
+  assert.equal(cli(root, ['stage', 'complete', 'review']).status, 2);
+  const vague = writeFile(root, '.agent-lifecycle/tmp/vague.md', '# Review\n\nAll good.\n');
+  assert.equal(cli(root, ['review', 'add', '--file', vague]).status, 2);
+});
+
+test('the release gate hash covers the code, committed or not', () => {
+  const { spawnSync } = require('node:child_process');
+  const root = tmpdir();
+  const git = (...a) => assert.equal(spawnSync('git', a, { cwd: root, encoding: 'utf8' }).status, 0, a.join(' '));
+  git('init', '-q');
+  git('config', 'user.email', 't@example.invalid');
+  git('config', 'user.name', 't');
+  const a = writeFile(root, 'src/a.js', 'one\n');
+  const past = new Date(Date.now() - 60000);
+  fs.utimesSync(a, past, past);
+  git('add', '.');
+  git('commit', '-qm', 'init');
+  ok(cli(root, ['start', 'x']));
+  const hash = () => ok(cli(root, ['hash', 'release'])).trim();
+  const h1 = hash();
+  assert.equal(hash(), h1, 'stable, and lifecycle bookkeeping does not change it');
+  // same size and the same mtime as the committed file: git's stat cache would call it unchanged
+  const f = writeFile(root, 'src/a.js', 'two\n');
+  fs.utimesSync(f, past, past);
+  const h2 = hash();
+  assert.notEqual(h2, h1, 'a same-size edit to a tracked file');
+  git('add', '.');
+  git('commit', '-qm', 'same content, now committed');
+  assert.equal(hash(), h2, 'committing the same content keeps the approval valid');
+  writeFile(root, 'src/new.js', 'x\n');
+  assert.notEqual(hash(), h2, 'a new untracked file');
+  assert.equal(spawnSync('git', ['status', '--porcelain', 'src'], { cwd: root, encoding: 'utf8' }).stdout, '?? src/new.js\n', 'the real index is untouched');
+});
+
+test('hooks record the session, and only that session resets the task budget', () => {
+  const { hook } = require('./helpers');
+  const root = tmpdir();
+  toBuild(root, [TASK(), TASK({ files: ['src/b.js'] })]);
+  const budget = () => JSON.parse(fs.readFileSync(path.join(root, '.agent-lifecycle/state.json'), 'utf8')).budget;
+  ok(cli(root, ['dispatch', 'start', 'T1', '--session', 'made-up']));
+  assert.equal(budget().session, null, 'an unrecorded session id is not adopted');
+  hook('session-start', { hook_event_name: 'SessionStart', session_id: 'real-2' }, root);
+  assert.equal(lib('dispatch').currentSession(root), 'real-2');
 });

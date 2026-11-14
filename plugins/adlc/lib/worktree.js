@@ -102,6 +102,28 @@ function worktreeProblems(root) {
   return p;
 }
 
+// Git tree id of the working tree as it is now (tracked and untracked files, ignored files and .agent-lifecycle/ left
+// out). The same content gives the same id whether or not it has been committed. Uses a throwaway index built from
+// HEAD, so the real index and working tree are untouched (git stores the hashed blobs as loose objects, which is harmless).
+function codeFingerprint(root) {
+  if (!isRepo(root)) return 'no-git';
+  const tmp = path.join(os.tmpdir(), `adlc-index-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const run = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8', env: { ...process.env, GIT_INDEX_FILE: tmp } });
+  try {
+    // Start from HEAD's tree with no cached file timestamps, so git re-reads every file. Copying the real index
+    // would reuse its stat cache, and a same-size edit within the same second would look unchanged.
+    if (run(['read-tree', 'HEAD']).status !== 0) return 'git-error';
+    if (run(['add', '-A', '--', '.', ':(exclude).agent-lifecycle']).status !== 0) return 'git-error';
+    run(['rm', '-r', '--cached', '-q', '--ignore-unmatch', '--', '.agent-lifecycle']);
+    const tree = run(['write-tree']);
+    return tree.status === 0 && tree.stdout.trim() ? tree.stdout.trim() : 'git-error';
+  } catch {
+    return 'git-error';
+  } finally {
+    try { fs.unlinkSync(tmp); } catch { /* never created */ }
+  }
+}
+
 function branchOf(worktree) {
   const r = git(worktree, ['rev-parse', '--abbrev-ref', 'HEAD']);
   return r.ok && r.out !== 'HEAD' ? r.out : null;
@@ -111,4 +133,4 @@ function isAncestor(root, ref) {
   return git(root, ['merge-base', '--is-ancestor', ref, 'HEAD']).ok;
 }
 
-module.exports = { WORKTREES_DIR, linkedWorktree, mainRootFor, git, isRepo, dirtyPaths, baseRefIsHead, worktreesIgnored, worktreeProblems, branchOf, isAncestor };
+module.exports = { WORKTREES_DIR, linkedWorktree, mainRootFor, git, isRepo, dirtyPaths, baseRefIsHead, worktreesIgnored, worktreeProblems, codeFingerprint, branchOf, isAncestor };

@@ -268,3 +268,51 @@ test('user-only adlc commands pass the guard only after the user typed the match
   userPrompt(root, '/adlc:unblock decided');
   assert.equal(decision(hook('guard', bash('node "/x/bin/adlc" unblock "decided" --task T1'), root)), null);
 });
+
+test('CLI-written records cannot be forged or removed, and the lifecycle directory cannot be moved away', () => {
+  const root = project();
+  for (const rel of ['test-results/E-1-verify.md', 'handoffs/T1.json', 'packets/T1.md', 'reviews/1.md', 'traceability.md', 'handoff.md', 'archive/x/state.json', '.gitignore']) {
+    assert.equal(decision(hook('guard', write(root, `.agent-lifecycle/${rel}`), root)), 'deny', rel);
+  }
+  assert.equal(decision(hook('guard', write(root, '.Agent-Lifecycle/State.json'), root)), 'deny', 'case-insensitive file systems');
+  for (const rel of ['requirements.md', 'plan.md', 'decisions.md', 'release.md', 'tmp/review.md']) {
+    assert.equal(decision(hook('guard', write(root, `.agent-lifecycle/${rel}`), root)), null, rel);
+  }
+  for (const cmd of [
+    'echo \'<!-- adlc-evidence {"exit":0} -->\' > .agent-lifecycle/test-results/E-1-verify.md',
+    'cp /tmp/fake.json .agent-lifecycle/handoffs/T1.json',
+    'rm .agent-lifecycle/test-results/E-1-build.md',
+    'sed -i s/1/0/ .agent-lifecycle/reviews/1.md',
+    'mv .agent-lifecycle .al-old',
+    'rm -rf .agent-lifecycle/',
+    'ln -sfn /tmp/other .agent-lifecycle',
+    'adlc archive --force',
+    'adlc "approve" plan',
+  ]) assert.equal(decision(hook('guard', bash(cmd), root)), 'deny', cmd);
+  for (const cmd of ['cat .agent-lifecycle/test-results/E-1-build.md 2>/dev/null', 'ls .agent-lifecycle', 'tail -60 .agent-lifecycle/handoff.md', 'rm .agent-lifecycle/tmp/tasks.json', 'git add .agent-lifecycle']) {
+    assert.notEqual(decision(hook('guard', bash(cmd), root)), 'deny', cmd);
+  }
+});
+
+test('the reviewer and other adlc subagents cannot write files through the shell', () => {
+  const root = project();
+  for (const role of ['adlc:reviewer', 'adlc:analyst', 'adlc:architect']) {
+    const who = { agent_id: 'a-1', agent_type: role };
+    assert.equal(decision(hook('guard', bash("sed -i 's/a/b/' src/a.js", who), root)), 'deny', role);
+    assert.equal(decision(hook('guard', bash('echo x > src/a.js', who), root)), 'deny', role);
+    assert.equal(decision(hook('guard', bash('git diff --stat 2>&1', who), root)), null, role);
+  }
+});
+
+test('guard denies the Grep tool on secret files and more secret file names', () => {
+  const root = project();
+  const grep = (ti) => ({ hook_event_name: 'PreToolUse', tool_name: 'Grep', cwd: root, tool_input: { pattern: 'KEY', ...ti } });
+  for (const ti of [{ path: path.join(root, '.env') }, { path: 'config/server.pem' }, { glob: '.env*' }, { glob: '**/*.key' }, { path: '.npmrc' }]) {
+    assert.equal(decision(hook('guard', grep(ti), root)), 'deny', JSON.stringify(ti));
+  }
+  for (const ti of [{ path: 'src' }, { glob: '*.js' }, { path: '.env.example' }, {}]) assert.equal(decision(hook('guard', grep(ti), root)), null, JSON.stringify(ti));
+  const read = (p) => ({ hook_event_name: 'PreToolUse', tool_name: 'Read', cwd: root, tool_input: { file_path: p } });
+  for (const p of ['.envrc', '.netrc', 'home/.aws/credentials', 'certs/site.p12']) assert.equal(decision(hook('guard', read(p), root)), 'deny', p);
+  assert.equal(decision(hook('guard', bash('cat ~/.aws/credentials'), root)), 'deny');
+  assert.match(fs.readFileSync(path.join(__dirname, '../plugins/adlc/hooks/hooks.json'), 'utf8'), /Bash\|Read\|Grep\|/);
+});

@@ -30,12 +30,12 @@ const HELP = `usage: adlc <command> [args]
   contract add --file <json>    packet render [T]    exec plan
   gate check <plan|release>     hash <plan|release>  approve <plan|release> [--note text]   (approve: user-only)
   run --stage <stage> [--task T] [--exclusive] -- <command...>
-  review add --file <md> --blocking N --optional N    trace
+  review add --file <md> [--blocking N --optional N]  (counts are read from the report)    trace
   dispatch check <T>   dispatch ready [--json]   dispatch start <T> [--session id]
   worker claim <T> --lease <L>   worker handoff <T> --file <json>
   integrate check <T>  integrate done <T>
   lease stopped <L> <note>   lease lost <L> <note>
-  handoff <note>   archive [--force]   init
+  handoff <note>   archive [--force] (user-only)   init
 exit codes: 0 ok, 1 usage, 2 rule violation, 3 concurrent modification, 4 not initialised,
             5 command failed (evidence recorded), 70 internal error`;
 
@@ -141,21 +141,21 @@ const handlers = {
       return e === undefined || e === '' ? undefined : e;
     };
     const title = need(pos.slice(1).join(' '), 'usage: adlc start "<title>" [--type feature|bugfix] [--small]');
-    const s = st.newState({
-      title,
-      type: flags.type || 'feature',
-      small: Boolean(flags.small),
-      config: {
-        approval_gates: opt('approval-gates'),
-        parallel_mode: opt('parallel-mode'),
-        max_parallel: opt('max-parallel'),
-        max_repair_attempts: opt('max-repair-attempts'),
-        max_tasks_per_run: opt('max-tasks-per-run'),
-        serial_globs: opt('serial-globs'),
-      },
-    });
+    const config = {
+      approval_gates: opt('approval-gates'),
+      parallel_mode: opt('parallel-mode'),
+      max_parallel: opt('max-parallel'),
+      max_repair_attempts: opt('max-repair-attempts'),
+      max_tasks_per_run: opt('max-tasks-per-run'),
+      serial_globs: opt('serial-globs'),
+    };
+    const s = st.newState({ title, type: flags.type || 'feature', small: Boolean(flags.small), config });
     s.stage = stages.current(s);
+    // Fewer gates than plan,release is the user's decision: it must come from their own /adlc:start (flag or plugin setting).
+    const gatesKey = userIntent.gatesKey(s.config.approval_gates);
+    const intent = gatesKey === userIntent.FULL_GATES ? null : userIntent.find(root, 'start', gatesKey, `with approval gates reduced to "${gatesKey}"`);
     st.create(root, s);
+    if (intent) userIntent.consume(root, intent);
     for (const [stage, v] of Object.entries(s.stages)) {
       if (v.status === 'skipped') record(root, { type: 'skip', change: s.change.id, stage, reason: v.reason, actor: 'user' });
     }
@@ -208,23 +208,25 @@ const handlers = {
   skip({ root, pos }) {
     const stage = need(pos[1], 'usage: adlc skip <stage> <reason>');
     const reason = need(pos.slice(2).join(' '), 'a skip reason is required: adlc skip <stage> <reason>');
-    userIntent.require(root, 'skip', stage);
+    const intent = userIntent.find(root, 'skip', stage);
     const change = st.mutate(root, (s) => {
       stages.skipStage(s, stage, reason);
       return s.change.id;
     });
+    userIntent.consume(root, intent);
     record(root, { type: 'skip', change, stage, reason, actor: 'user' });
     return { text: `${stage} skipped: ${reason}` };
   },
 
   unblock({ root, pos, flags }) {
     const note = need(pos.slice(1).join(' '), 'usage: adlc unblock <note> [--task T]');
-    userIntent.require(root, 'unblock');
+    const intent = userIntent.find(root, 'unblock');
     const change = st.mutate(root, (s) => {
       s.blocker = null;
       if (flags.task) tasks.unblockTask(s, flags.task);
       return s.change.id;
     });
+    userIntent.consume(root, intent);
     record(root, { type: 'unblock', change, task: flags.task || null, note, actor: 'user' });
     return { text: `unblocked${flags.task ? ` ${flags.task}` : ''}` };
   },
@@ -324,8 +326,15 @@ const handlers = {
 
   approve({ root, pos, flags }) {
     const gate = need(pos[1], 'usage: adlc approve <plan|release> [--note text]');
-    userIntent.require(root, 'approve', gate);
-    const rec = gates.approve(root, st.load(root), gate, typeof flags.note === 'string' ? flags.note : '');
+    if (!gates.GATES.includes(gate)) throw usage(`unknown gate "${gate}" (gates: ${gates.GATES.join(', ')})`);
+    const intent = userIntent.find(root, 'approve', gate);
+    const s = st.load(root);
+    // The approval covers what the user saw when they typed the command, not what the files hold now.
+    if (intent.hash !== gates.gateHash(root, s, gate)) {
+      throw rule(`the files covered by the ${gate} gate changed after the user typed /adlc:approve ${gate} (or no hash was recorded with it). Do not edit them between the prompt and the approval; ask the user to review and type /adlc:approve ${gate} again`);
+    }
+    const rec = gates.approve(root, s, gate, typeof flags.note === 'string' ? flags.note : '');
+    userIntent.consume(root, intent);
     return { obj: rec, text: `approved ${gate} (hash ${rec.hash.slice(0, 12)})` };
   },
 
@@ -338,12 +347,16 @@ const handlers = {
   },
 
   review({ root, pos, flags }) {
-    if (pos[1] !== 'add') throw usage('usage: adlc review add --file <md> --blocking N --optional N');
+    if (pos[1] !== 'add') throw usage('usage: adlc review add --file <md>');
     const src = need(flags.file, '--file <md> is required');
-    const blocking = Number(need(flags.blocking, '--blocking N is required'));
-    const optional = Number(need(flags.optional, '--optional N is required'));
-    if (!Number.isInteger(blocking) || blocking < 0 || !Number.isInteger(optional) || optional < 0) throw usage('--blocking and --optional must be non-negative integers');
     const body = fs.readFileSync(src, 'utf8');
+    // The counts come from the report itself; the optional flags only cross-check them.
+    const counted = rules.reviewCounts(body);
+    if (counted.problems.length) throw rule(`cannot count the findings in ${src}:\n- ${counted.problems.join('\n- ')}\nAsk the reviewer for a report in the templates/review.md format; do not rewrite it yourself`);
+    const { blocking, optional } = counted;
+    for (const [flag, n] of [['blocking', blocking], ['optional', optional]]) {
+      if (flags[flag] !== undefined && Number(flags[flag]) !== n) throw rule(`--${flag} ${flags[flag]} does not match the report, which lists ${n} ${flag} finding(s)`);
+    }
     return st.mutate(root, (s) => {
       if (s.stages.review.status !== 'in_progress') throw rule('reviews can be recorded only while the review stage is in progress');
       const ts = st.now();
@@ -437,7 +450,7 @@ const handlers = {
     const sub = pos[1];
     const leaseId = need(pos[2], 'usage: adlc lease stopped|lost <L> <note>');
     const note = pos.slice(3).join(' ');
-    if (sub === 'stopped') return st.mutate(root, (s) => ({ obj: dispatch.confirmStopped(s, leaseId, note), text: `${leaseId} confirmed stopped` }));
+    if (sub === 'stopped') return st.mutate(root, (s) => ({ obj: dispatch.confirmStopped(root, s, leaseId, note), text: `${leaseId} confirmed stopped` }));
     if (sub === 'lost') return st.mutate(root, (s) => ({ text: `${leaseId} lost; task is now ${dispatch.markLost(s, leaseId, note)}` }));
     throw usage('usage: adlc lease stopped|lost <L> <note>');
   },
@@ -452,6 +465,8 @@ const handlers = {
   archive({ root, flags }) {
     const s = st.load(root);
     if (stages.current(s) !== 'done' && !flags.force) throw rule(`change ${s.change.id} is not done (stage ${stages.current(s)}); use --force to archive anyway`);
+    // Archiving removes state.json, which switches the hooks off: only the user decides that.
+    userIntent.consume(root, userIntent.find(root, 'archive'));
     const p = st.paths(root);
     const dest = path.join(p.dir, 'archive', s.change.id);
     fs.mkdirSync(dest, { recursive: true });

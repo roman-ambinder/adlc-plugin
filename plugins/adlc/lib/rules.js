@@ -29,6 +29,27 @@ function sectionFilled(text, heading) {
   return false;
 }
 
+// Counts findings in a reviewer report that follows templates/review.md: `- [B1] ...` under "## Blocking findings",
+// `- [O1] ...` under "## Optional improvements". Returns problems when the report cannot be counted reliably.
+function reviewCounts(text) {
+  const section = (heading) => {
+    const lines = String(text).split('\n');
+    const start = lines.findIndex((l) => l.trim().toLowerCase() === `## ${heading}`.toLowerCase());
+    if (start === -1) return null;
+    const end = lines.findIndex((l, i) => i > start && /^##\s/.test(l));
+    return lines.slice(start + 1, end === -1 ? lines.length : end).filter((l) => l.trim() && !l.trim().startsWith('_') && !l.trim().startsWith('<!--'));
+  };
+  const count = (lines, tag) => lines.filter((l) => new RegExp(`^\\s*[-*]\\s*\\[${tag}\\d+\\]`).test(l)).length;
+  const problems = [];
+  const b = section('Blocking findings');
+  const o = section('Optional improvements') || [];
+  if (!b) problems.push('the report has no "## Blocking findings" section');
+  else if (!count(b, 'B') && !(b.length === 1 && /^none\.?$/i.test(b[0].trim()))) {
+    problems.push('"## Blocking findings" must hold `- [B<n>] ...` items or exactly "None."');
+  }
+  return { blocking: b ? count(b, 'B') : 0, optional: count(o, 'O'), problems };
+}
+
 function trace(root, s) {
   const ev = evidence.list(root);
   return acIds(readDoc(root, 'requirements.md')).map((ac) => {
@@ -86,7 +107,12 @@ function completeProblems(root, s, stage) {
       const since = s.stages.verify.started || '';
       const ev = evidence.list(root).filter((e) => e.stage === 'verify' && e.ts >= since);
       if (!ev.length) p.push('no verification evidence since verify started: run checks with `adlc run --stage verify -- "<cmd>"`');
-      for (const [cmd, e] of evidence.latestByCmd(ev)) if (e.exit !== 0) p.push(`latest run of "${cmd}" failed (exit ${e.exit}; ${e.file})`);
+      const latest = evidence.latestByCmd(ev);
+      for (const [cmd, e] of latest) if (e.exit !== 0) p.push(`latest run of "${cmd}" failed (exit ${e.exit}; ${e.file})`);
+      // Verification must at least re-run the checks the user approved with the plan; an unrelated passing command is not enough.
+      for (const cmd of new Set(s.tasks.flatMap((t) => t.checks))) {
+        if (!latest.has(cmd)) p.push(`approved task check "${cmd}" has not been run in this verify stage: adlc run --stage verify -- "${cmd}"`);
+      }
       break;
     }
     case 'review': {
@@ -113,4 +139,4 @@ function completeProblems(root, s, stage) {
   return p;
 }
 
-module.exports = { acIds, sectionFilled, trace, renderTrace, startProblems, completeProblems, readDoc };
+module.exports = { reviewCounts, acIds, sectionFilled, trace, renderTrace, startProblems, completeProblems, readDoc };
