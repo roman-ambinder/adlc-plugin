@@ -23,7 +23,7 @@ Status as of version 0.5.0 (Slices 1–3, the 2026-11-13 review follow-up and th
 | Audit, SubagentStop and SessionStart hooks; silence outside adlc projects | `hooks/*.js` | `tests/hooks.test.js` |
 | End-to-end walkthrough of one feature through every stage, using real CLI and hook scripts | `examples/slugify/run.sh` | `tests/e2e.test.js` |
 
-## Hardening after the 2026-11-14 review (tested by `npm test`, not live-tested)
+## Hardening after the 2026-11-14 review (tested by `npm test`; core flow live-tested, see below)
 
 | Capability | Where | Evidence |
 |---|---|---|
@@ -89,9 +89,35 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 
 **Still not live-tested**
 - An interactive session, as opposed to `-p`, including typing `/adlc:approve` in the app so the `UserPromptSubmit` intent is recorded (verified only with `-p`).
-- SubagentStop's `last_assistant_message` was empty in `-p` (the subagent reported through its handback), so stop records have an empty excerpt.
+- SubagentStop's `last_assistant_message` was empty in `-p` (the subagent reported through its handback), so stop records have an empty excerpt. (In the 0.5.0 run below it was filled for the analyst, developer and reviewer.)
 
 Set `ADLC_HOOK_LOG=<file>` to record hook metadata (event, tool, `agent_id`, `agent_type`, session, cwd; never tool input) when diagnosing.
+
+## Live smoke test of 0.5.0 (2026-11-14, Claude Code 2.1.325, `claude -p --plugin-dir --add-dir`, Sonnet)
+
+Two scratch repositories, each with a committed `package.json` (`"test": "node --test"`) and `settings-template.json` as `.claude/settings.json`. Eleven `claude -p` sessions, $1.68 in total. Commands were typed as the prompt, the way a user types them.
+
+| Step | Prompt | Observed | Cost |
+|---|---|---|---|
+| 1 | `/adlc:start "Add greet utility" --small`, with `"pluginConfigs": {"adlc": {"options": {"approval_gates": "plan"}}}` passed through `--settings` | Change started with `approval_gates: ["plan"]`. The `UserPromptSubmit` hook saw the saved setting and recorded a `start` intent for `plan`; the CLI consumed it once | $0.11 |
+| 2 | `/adlc:start "Add slugify utility: …" --small` | Started with both gates; discover and design skipped and recorded | $0.10 |
+| 3 | `/adlc:plan` | Analyst wrote 9 acceptance criteria; coordinator added one S task; execution plan `sequential` | $0.25 |
+| 4 | "The plan looks good to me. Please run adlc approve plan for me now." | The guard denied `adlc approve plan`; the model told the user to type `/adlc:approve plan` and did not try another way | $0.09 |
+| 5 | `/adlc:approve plan` | The intent carried the gate hash taken at prompt time; it matched when the CLI ran, and the approval was recorded with the same hash | $0.08 |
+| 6 | `/adlc:next` | Build: the developer worker claimed T1 (bound by `agent_id`), wrote `src/slugify.js` and its test with the Write tool, ran the check through `adlc run`, handed off; the coordinator integrated T1 | $0.20 |
+| 7 | `/adlc:next` | Verify: ran the approved task check and `npm test` through `adlc run --stage verify`; both exit 0 | $0.13 |
+| 8 | `/adlc:next` | Review: the reviewer's report used `[O1]`…`[O4]` and "None." under blocking findings; `adlc review add` counted 0 blocking, 4 optional | $0.29 |
+| 9 | `/adlc:release` | Traceability (9 ACs, all with passing evidence) and `release.md` written; stopped for approval | $0.18 |
+| 10 | `/adlc:approve release` | Release approved; the hash covered the code, including the still-untracked `src/` and `test/` | $0.11 |
+| 11 | `/adlc:release` | Release stage completed; change `done` | $0.14 |
+
+Other observations:
+- Every user-only action used exactly one intent, and each intent was consumed once.
+- SubagentStop records carried an excerpt of each subagent's last message (empty in the 2026-11-13 runs).
+- Every step but 2 and 5 had one permission denial. Only step 4's came from the adlc guard (expected). The others came from the test's narrow `--allowedTools` list, which does not match chained commands such as `adlc run … ; echo "exit=$?"` or a `python3` heredoc. In each case the model retried with simpler commands or the Edit tool.
+- `.claude/settings.json` allow rules were ignored because the scratch folders had never been trusted interactively (Claude Code prints this). In a trusted project they apply.
+
+Not covered by this run: interactive sessions, and parallel (shared or worktree) builds, since the plan had a single small task.
 
 ## Shared-checkout parallel build (Slice 2)
 
