@@ -104,7 +104,7 @@ function statusObj(root, s) {
     leases: dispatch.activeLeases(s),
     ready: building ? dispatch.readyToDispatch(root, s).map((t) => t.id) : [],
     blocker: s.blocker,
-    budget: s.budget,
+    budget: { ...s.budget, used: dispatch.usedThisRun(root, s) },
     metrics: s.metrics,
     next: stages.nextAction(s),
   };
@@ -122,7 +122,7 @@ function statusText(o) {
     `Active workers: ${o.leases.length ? o.leases.map((l) => `${l.task} (${l.lease})`).join(', ') : 'none'}`,
     `Ready to dispatch: ${o.ready.length ? o.ready.join(', ') : 'none'}`,
     `Blocker: ${o.blocker || 'none'}`,
-    `Budget: ${o.budget.tasks_this_run}/${o.budget.max_tasks_per_run} tasks this run; retries ${o.metrics.retries}; integration failures ${o.metrics.integration_failures}`,
+    `Budget: ${o.budget.used}/${o.budget.max_tasks_per_run} tasks this run; retries ${o.metrics.retries}; integration failures ${o.metrics.integration_failures}`,
     `Next: ${o.next.action} ${o.next.stage}`,
   ];
   return lines.join('\n');

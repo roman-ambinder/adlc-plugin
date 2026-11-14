@@ -71,6 +71,12 @@ test('worker and coordinator rules ask for one adlc command per Bash call', () =
   for (const name of ['worker-contract', 'coordinator']) assert.match(read(`skills/${name}/SKILL.md`), /each `adlc` command as its own Bash call/, name);
 });
 
+test('release completes an approved release before touching the covered files', () => {
+  const text = read('skills/release/SKILL.md');
+  const complete = text.indexOf('run `adlc stage complete release` now and stop');
+  assert.ok(complete > -1 && complete < text.indexOf('`adlc trace` writes'), 'the approved path comes before trace and the release.md refresh');
+});
+
 test('setup skill runs a dry run before writing, and the template does not pre-allow setup', () => {
   const text = read('skills/setup/SKILL.md');
   const dry = text.indexOf('adlc setup --dry-run');

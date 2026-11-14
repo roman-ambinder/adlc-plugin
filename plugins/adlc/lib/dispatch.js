@@ -36,6 +36,13 @@ function endLease(lease, status) {
   lease.ended = now();
 }
 
+// Tasks dispatched in the current run. A new session the hooks recorded starts a new run, so the count from an earlier
+// session does not block it (startDispatch then resets the stored count). Without any recorded session, the stored count stands.
+function usedThisRun(root, s) {
+  const cur = currentSession(root);
+  return cur && s.budget.session && cur !== s.budget.session ? 0 : s.budget.tasks_this_run;
+}
+
 // The parallel readiness gate. Returns every failing reason (empty = dispatchable).
 function checkDispatch(root, s, id) {
   const t = s.tasks.find((x) => x.id === id);
@@ -63,7 +70,7 @@ function checkDispatch(root, s, id) {
   if (s.execution.mode === 'worktree') {
     for (const x of worktreeProblems(root)) problems.push(`worktree mode precondition: ${x}`);
   }
-  if (s.budget.tasks_this_run >= s.budget.max_tasks_per_run) problems.push(`task budget for this run reached (${s.budget.max_tasks_per_run}); stop and resume in a new session`);
+  if (usedThisRun(root, s) >= s.budget.max_tasks_per_run) problems.push(`task budget for this run reached (${s.budget.max_tasks_per_run}); stop and resume in a new session`);
   return problems;
 }
 
@@ -151,5 +158,5 @@ function markLost(s, leaseId, note) {
 }
 
 module.exports = {
-  currentSession, activeLeases, effectiveMax, stops, hasStopped, leaseFor, endLease, checkDispatch, readyToDispatch, startDispatch, confirmStopped, markLost,
+  usedThisRun, currentSession, activeLeases, effectiveMax, stops, hasStopped, leaseFor, endLease, checkDispatch, readyToDispatch, startDispatch, confirmStopped, markLost,
 };
