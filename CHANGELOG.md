@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+- `adlc setup` now finds the project folder the same way as the rest of the CLI. In a linked git worktree it writes to the main checkout, and outside git it uses the folder that holds the active change.
+- `adlc setup` refuses a `.gitignore` or `.claude/settings.json` that is a folder with a clear message (exit 2) instead of an internal error.
+- `adlc setup` keeps Windows (CRLF) line endings when it adds to `.gitignore`.
+
 ## 0.7.0 — 2026-11-14
 
 Ready for public use. A first-run test installed the plugin from GitHub into a fresh Claude Code setup and took a change from start to release; this release fixes what it found.
