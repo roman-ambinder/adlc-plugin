@@ -175,14 +175,20 @@ const handlers = {
     if (n.action === 'continue') o.complete_problems = rules.completeProblems(root, s, n.stage);
     if (n.stage === 'build' && n.action === 'continue') {
       o.ready = dispatch.readyToDispatch(root, s).map((t) => t.id);
-      o.in_flight = s.tasks.filter((t) => ['dispatched', 'returned'].includes(t.status)).map((t) => ({ id: t.id, status: t.status }));
+      // What the coordinator does next with each task in flight, so a new session does not repeat a finished step.
+      const nextFor = (t) => {
+        if (t.status === 'dispatched') return `when its worker has returned: adlc integrate check ${t.id}`;
+        const prefix = s.execution.mode === 'worktree' ? `once the commit and merge commands printed by \`adlc integrate check ${t.id}\` have run: ` : '';
+        return `${prefix}run the cross-task checks with adlc run --stage build, then adlc integrate done ${t.id}`;
+      };
+      o.in_flight = s.tasks.filter((t) => ['dispatched', 'returned'].includes(t.status)).map((t) => ({ id: t.id, status: t.status, next: nextFor(t) }));
     }
     const text = [
       `${n.action} ${n.stage}${n.blocker ? `: ${n.blocker}` : ''}`,
       bulletList('Cannot start yet:', o.problems || []),
       bulletList('Before completing this stage:', o.complete_problems || []),
       o.ready ? `Ready to dispatch: ${o.ready.join(', ') || 'none'}` : '',
-      o.in_flight && o.in_flight.length ? `In flight: ${o.in_flight.map((t) => `${t.id} (${t.status})`).join(', ')}` : '',
+      o.in_flight && o.in_flight.length ? `In flight:\n${o.in_flight.map((t) => `- ${t.id} (${t.status}): ${t.next}`).join('\n')}` : '',
     ].filter(Boolean).join('\n');
     return { obj: o, text };
   },
@@ -431,8 +437,8 @@ const handlers = {
           r.ok ? `${id} passed the integration check` : `${id} failed the integration check:`,
           ...r.problems.map((x) => `- ${x}`),
           ...r.warnings.map((x) => `warning: ${x}`),
-          r.ok && r.commands ? `next: ask the user to approve and run these exact commands (commit in the worktree, then merge into the current branch):\n${r.commands.map((c) => `  ${c}`).join('\n')}` : '',
-          r.ok ? `${r.commands ? 'then' : 'next:'} run each cross-task check with adlc run --stage build -- "<cmd>", then adlc integrate done ${id}:\n${r.cross_checks.map((c) => `  ${c}`).join('\n')}` : '',
+          r.ok && r.commands && r.commands.length ? `next: ask the user to approve and run these exact commands (commit in the worktree, then merge into the current branch):\n${r.commands.map((c) => `  ${c}`).join('\n')}` : '',
+          r.ok ? `${r.commands && r.commands.length ? 'then' : 'next:'} run each cross-task check with adlc run --stage build -- "<cmd>", then adlc integrate done ${id}:\n${r.cross_checks.map((c) => `  ${c}`).join('\n')}` : '',
         ].filter(Boolean).join('\n');
         return { obj: r, text, exit: r.ok ? EXIT.OK : EXIT.RULE };
       });

@@ -119,6 +119,24 @@ Other observations:
 
 Not covered by this run: interactive sessions, and parallel (shared or worktree) builds, since the plan had a single small task.
 
+## Live parallel-build test of 0.5.0 (2026-11-14, Claude Code 2.1.325, `claude -p`, Sonnet)
+
+Two independent M tasks (`src/slugify.js` and `src/titlecase.js`, each with its own test), once per mode, in scratch repositories with `settings-template.json` as `.claude/settings.json`. Modes were set through `pluginConfigs` because of the start-flag bug below. About $2.90 in total.
+
+**Shared mode, one `/adlc:next` ($0.29):** passed.
+- Both workers were dispatched 0.07 s apart, and their writes overlap in time.
+- Each was bound to its own lease and wrote only its task's files.
+- Both SubagentStop records released their leases; both tasks were integrated and build completed.
+
+**Worktree mode:** passed after three fixes.
+- *First run:* both workers' first Bash call was denied, so neither claimed its task. The command was `pwd && (adlc worker claim … || node …/bin/adlc worker claim …)`, which no allow rule matched, and the workers did not retry the plain form. The coordinator stopped correctly and refused a worker's offer to write files without claiming. **Fixed:** one `adlc` command per Bash call, and a plain retry after a denial.
+- *Second run:* both workers claimed, built in their own worktrees and passed `integrate check`. The coordinator stopped at the commit commands, which `-p` cannot approve. The test then ran the printed add, commit and merge commands as the user. The next `/adlc:next` re-ran `integrate check`, which failed with "no uncommitted changes to integrate", and stopped. **Fixed:** `integrate check` accepts a returned task that is already committed and merged, and `adlc next` names each in-flight task's next step.
+- *Resumed on the same repository with the fix:* the coordinator ran the cross-task checks, `integrate done` for both tasks, and completed build ($0.17). The history shows two `--no-ff` merges.
+
+**Also found:** a flag typed after `/adlc:start` (for example `--parallel-mode shared`) was overridden by the skill's settings flags. **Fixed:** the user's arguments now come last.
+
+**Not covered:** typing the commands in the interactive app, where the commit and merge commands would show a permission prompt.
+
 ## Shared-checkout parallel build (Slice 2)
 
 Implemented, tested (`tests/parallel.test.js`, `tests/workflow.test.js`) and live-tested.

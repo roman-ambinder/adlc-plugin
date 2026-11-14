@@ -112,7 +112,10 @@ function integrateCheck(root, s, id) {
   if (outside.length) problems.push(`changed files outside ${id}'s writable set: ${outside.join(', ')}`);
   let worktree = null;
   if (s.execution.mode === 'worktree') {
-    worktree = worktreeDetails(root, t, h, problems, warnings);
+    // After the user ran the printed commit and merge commands, a re-check must not fail for "no uncommitted changes".
+    const merged = t.status === 'returned' ? mergedWorktree(root, s, t) : null;
+    if (merged) warnings.push(`${id} is already committed and merged (${merged.branch}); nothing left to commit`);
+    worktree = merged || worktreeDetails(root, t, h, problems, warnings);
     for (const f of worktree ? worktree.changed : []) changed.add(f);
     const outsideWt = worktree ? worktree.changed.filter((f) => !t.files.some((g) => entriesOverlap(g, f))) : [];
     if (outsideWt.length) problems.push(`worktree changes outside ${id}'s writable set: ${outsideWt.join(', ')}`);
@@ -168,6 +171,16 @@ function worktreeDetails(root, t, h, problems, warnings) {
   if (artifacts.length) warnings.push(`left out of the commit (written by check runs, not by the worker): ${artifacts.join(', ')}`);
   const base = wt.git(workspace, ['rev-parse', 'HEAD']).out || null;
   return { workspace, branch, base, changed, commands };
+}
+
+// A returned worktree task whose branch has a commit, is merged into HEAD and leaves the worktree clean.
+function mergedWorktree(root, s, t) {
+  const lease = [...s.leases].reverse().find((l) => l.task === t.id && l.branch && l.workspace);
+  if (!lease) return null;
+  const tip = wt.git(root, ['rev-parse', lease.branch]).out;
+  if (!tip || tip === lease.base || !wt.isAncestor(root, lease.branch)) return null;
+  if (worktreeChanges(root, lease.workspace, t).changed.length) return null;
+  return { workspace: lease.workspace, branch: lease.branch, base: lease.base, changed: [], commands: [] };
 }
 
 function recordReturned(s, id, details = {}) {

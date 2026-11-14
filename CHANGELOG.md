@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+Fixes found by a live parallel-build test (2026-11-14).
+
+### Fixed
+- **Worktree builds stalled after the merge.** Once the user had run the printed commit and merge commands, a second `adlc integrate check` failed with "no uncommitted changes to integrate", and the coordinator stopped. The check now accepts a returned task whose branch is committed and merged, and points at the cross-task checks and `adlc integrate done`. `adlc next` lists each task in flight with its next step.
+- **Typed `/adlc:start` flags were ignored.** The start skill put your arguments before the plugin-settings flags, so `--parallel-mode shared` or `--approval-gates plan` was overridden by the saved setting, or by an unsubstituted placeholder. Your arguments now come last and win.
+- **Worktree workers could be denied their first command.** Workers chained their claim (`pwd && (adlc … || node …)`), which no allow rule matches. The worker contract and coordinator rules now ask for each `adlc` command as its own Bash call, with one plain retry after a denial. This is the likely cause of the unexplained worktree denial in the 0.4.0 live test.
+
 ## 0.5.0 — 2026-11-14
 
 Hardening from the 2026-11-14 review. All covered by `npm test` and CI; not yet live-tested in a Claude Code session.
