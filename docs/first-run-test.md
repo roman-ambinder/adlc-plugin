@@ -48,3 +48,4 @@ Per-step costs grow fast when one conversation is continued (`--continue`): $0.3
 - **P5 — known issue, needs docs.** The install message about unset options looks like an error. The README should say the defaults apply and setting options is optional.
 - **P6 — known issue, needs docs.** Long conversations make each stage cost more. State lives on disk, so `/clear` (or a new session) between stages is safe and cheaper. The cost section should say so.
 - File edits ask for approval in Claude Code's default permission mode. This is normal Claude Code behaviour, not an adlc problem; not counted.
+- **P7 — stops a stranger.** The release skill runs `adlc summary` (added in 0.6.0), but the settings template did not allow it, so release stopped for a permission prompt (refused in `-p`). **Fixed:** added to the template, with a test that every routine subcommand is allowed.

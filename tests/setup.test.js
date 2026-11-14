@@ -118,3 +118,12 @@ test('start prints a setup tip only when the project is not set up', () => {
   ok(cli(b, ['setup']));
   assert.doesNotMatch(ok(cli(b, ['start', 'x'])), /adlc:setup/);
 });
+
+// First-run test P7: `adlc summary` (0.6.0) was missing from the template, so the release stage stopped for a prompt.
+test('settings template allows every routine adlc subcommand the skills run', () => {
+  const allow = JSON.parse(fs.readFileSync(path.join(PLUGIN, 'settings-template.json'), 'utf8')).permissions.allow;
+  for (const sub of ['status', 'start', 'next', 'stage', 'task', 'contract', 'packet', 'exec', 'gate', 'hash', 'run', 'review', 'trace', 'dispatch', 'worker', 'integrate', 'handoff', 'summary']) {
+    assert.ok(allow.includes(`Bash(adlc ${sub} *)`) || allow.includes(`Bash(adlc ${sub})`), sub);
+  }
+  for (const sub of ['approve', 'skip', 'unblock', 'archive', 'cancel', 'lease', 'setup']) assert.ok(!allow.some((e) => e.startsWith(`Bash(adlc ${sub}`)), sub);
+});

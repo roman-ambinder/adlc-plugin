@@ -6,7 +6,7 @@
       "Bash(adlc stage *)", "Bash(adlc task *)", "Bash(adlc contract *)", "Bash(adlc packet *)",
       "Bash(adlc exec *)", "Bash(adlc gate *)", "Bash(adlc hash *)", "Bash(adlc run *)",
       "Bash(adlc review *)", "Bash(adlc trace)", "Bash(adlc dispatch *)", "Bash(adlc worker *)",
-      "Bash(adlc integrate *)", "Bash(adlc handoff *)"
+      "Bash(adlc integrate *)", "Bash(adlc handoff *)", "Bash(adlc summary)", "Bash(adlc summary *)"
     ],
     "ask": [
       "Bash(git commit *)", "Bash(git push *)", "Bash(gh pr *)", "Bash(npm install *)", "Bash(npm publish *)"
