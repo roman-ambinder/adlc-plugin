@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 — 2026-11-14
 
 Fixes found by a live parallel-build test (2026-11-14).
 
