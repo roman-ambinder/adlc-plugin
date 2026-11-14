@@ -92,7 +92,7 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 - Shared mode completed integration live. Worktree mode completed end to end with the user's commit and merge commands run by hand (`-p` cannot approve them): two `--no-ff` merges, `integrate done` accepted both.
 - One earlier worktree run had both workers' first Bash call denied by the platform permission layer (their claims never ran). It did not reproduce on a rerun with the same flags and I did not find the cause.
 
-**Still not live-tested**
+**Still not live-tested** (the maintainer's steps for this are in [interactive-checklist.md](interactive-checklist.md))
 - An interactive session, as opposed to `-p`, including typing `/adlc:approve` in the app so the `UserPromptSubmit` intent is recorded (verified only with `-p`).
 - SubagentStop's `last_assistant_message` was empty in `-p` (the subagent reported through its handback), so stop records have an empty excerpt. (In the 0.5.0 run below it was filled for the analyst, developer and reviewer.)
 
