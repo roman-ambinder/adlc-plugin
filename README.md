@@ -115,7 +115,6 @@ adlc-plugin/
 ├── docs/
 │   ├── capabilities.md                  implemented / tested / unsupported
 │   ├── images/                          README screenshots
-│   ├── images/                          README screenshots
 │   └── superpowers/                     design spec and implementation plan
 ├── examples/slugify/
 │   ├── run.sh                           end-to-end walkthrough
