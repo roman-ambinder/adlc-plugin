@@ -127,3 +127,40 @@ test('settings template allows every routine adlc subcommand the skills run', ()
   }
   for (const sub of ['approve', 'skip', 'unblock', 'archive', 'cancel', 'lease', 'setup']) assert.ok(!allow.some((e) => e.startsWith(`Bash(adlc ${sub}`)), sub);
 });
+
+// Deferred review minors (0.7.0 final review).
+test('setup outside git uses the folder that holds the active change, like the rest of the CLI', () => {
+  const root = tmpdir();
+  ok(cli(root, ['start', 'x']));
+  fs.mkdirSync(path.join(root, 'sub'));
+  ok(cliAt(path.join(root, 'sub'), ['setup']));
+  assert.ok(fs.existsSync(path.join(root, '.claude', 'settings.json')));
+  assert.ok(!fs.existsSync(path.join(root, 'sub', '.claude')));
+});
+
+test('setup in a linked git worktree writes to the main checkout', () => {
+  const root = gitRepo();
+  spawnSync('git', ['-c', 'user.email=t@e.invalid', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: root });
+  const wt = path.join(root, 'wt');
+  spawnSync('git', ['worktree', 'add', '-q', wt], { cwd: root });
+  ok(cliAt(wt, ['setup']));
+  assert.ok(fs.existsSync(path.join(root, '.claude', 'settings.json')));
+  assert.ok(!fs.existsSync(path.join(wt, '.claude')));
+});
+
+test('setup refuses a .gitignore or settings.json that is a folder, writing nothing', () => {
+  for (const rel of ['.gitignore', '.claude/settings.json']) {
+    const root = tmpdir();
+    fs.mkdirSync(path.join(root, rel), { recursive: true });
+    const r = cli(root, ['setup']);
+    assert.equal(r.status, 2, rel);
+    assert.match(r.stderr, /is not a file/);
+  }
+});
+
+test('setup keeps CRLF line endings in .gitignore', () => {
+  const root = tmpdir();
+  writeFile(root, '.gitignore', 'node_modules/\r\ndist/');
+  ok(cli(root, ['setup']));
+  assert.equal(gitignoreOf(root), 'node_modules/\r\ndist/\r\n.claude/worktrees/\r\n');
+});

@@ -4,7 +4,6 @@
 // and a template entry the user already has in a different permission list is skipped and reported.
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 const { atomicWrite } = require('./fsutil');
 const { rule } = require('./errors');
 
@@ -12,10 +11,15 @@ const LISTS = ['allow', 'ask', 'deny'];
 const SETTINGS = path.join('.claude', 'settings.json');
 const WORKTREES = '.claude/worktrees/';
 
-function projectRoot(cwd, env = process.env) {
-  if (env.ADLC_ROOT) return path.resolve(env.ADLC_ROOT);
-  const r = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd, encoding: 'utf8' });
-  return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : cwd;
+// Same lookup as the rest of the CLI (state.findRoot): ADLC_ROOT, else the folder holding the active change, else the
+// main checkout's git top level (also from a linked worktree), else the current folder.
+function projectRoot(cwd) {
+  return require('./state').findRoot(cwd);
+}
+
+// A path that exists but is not a regular file (for example a folder) is refused before anything is written.
+function mustBeFile(file, label) {
+  if (fs.existsSync(file) && !fs.statSync(file).isFile()) throw rule(`${label} is not a file; fix it, then run adlc setup again. Nothing was changed`);
 }
 
 function loadTemplate() {
@@ -26,6 +30,7 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 
 function readSettings(root) {
   const file = path.join(root, SETTINGS);
+  mustBeFile(file, '.claude/settings.json');
   if (!fs.existsSync(file)) return { settings: {}, existed: false };
   let settings;
   try {
@@ -41,6 +46,13 @@ function readSettings(root) {
   }
   if (settings.worktree !== undefined && !isObject(settings.worktree)) throw rule('.claude/settings.json: worktree must be an object; nothing was changed');
   return { settings, existed: true };
+}
+
+// Appends one line, keeping the file's line endings (CRLF if it already uses them).
+function appendLine(text, line) {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const sep = text && !text.endsWith('\n') ? eol : '';
+  return `${text}${sep}${line}${eol}`;
 }
 
 const ignoreKey = (line) => line.replace(/\r$/, '').trim().replace(/^\//, '').replace(/\/$/, '');
@@ -78,11 +90,12 @@ function planSetup(root, template) {
     }
   }
   const ignoreFile = path.join(root, '.gitignore');
+  mustBeFile(ignoreFile, '.gitignore');
   const ignoreText = fs.existsSync(ignoreFile) ? fs.readFileSync(ignoreFile, 'utf8') : '';
   const hasEntry = ignoreText.split('\n').some((l) => ignoreKey(l) === ignoreKey(WORKTREES));
   const gitignore = hasEntry
     ? { text: ignoreText, changed: false }
-    : { text: `${ignoreText}${ignoreText && !ignoreText.endsWith('\n') ? '\n' : ''}${WORKTREES}\n`, changed: true };
+    : { text: appendLine(ignoreText, WORKTREES), changed: true };
   return { settings, settingsChanged: added.length > 0 || baseRefAdded, settingsExisted: existed, added, baseRefAdded, skipped, notes, gitignore };
 }
 
