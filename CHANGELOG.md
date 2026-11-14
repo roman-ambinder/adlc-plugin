@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-11-14
 
 ### Added
 - **`/adlc:cancel <reason>`** (user-only): stop an unfinished change. Active workers' leases end as lost, the reason is recorded in `approvals.jsonl` and `handoff.md`, and the change is archived. Code already written stays in place for you to review.
