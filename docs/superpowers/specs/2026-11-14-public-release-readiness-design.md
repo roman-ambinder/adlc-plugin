@@ -103,7 +103,7 @@ Move into `docs/` (content moved, not deleted):
 - `SECURITY.md`: how to report a vulnerability privately (GitHub private vulnerability reporting), what counts (guard bypasses, state tampering, secret leaks in evidence), and the known best-effort limits so reports focus on real gaps.
 - `CONTRIBUTING.md`: setup, `npm test`, `npm run validate`, plain-language docs rule, changelog entry, how releases happen.
 - `.github/ISSUE_TEMPLATE/` (bug report asking for Claude Code version, Node version, OS, `adlc status`, and `ADLC_HOOK_LOG` output; feature request) and `.github/pull_request_template.md`.
-- Fix `marketplace.json` description ("Local marketplace…") and set real owner/author in `marketplace.json`, `plugin.json` and `LICENSE` (value from the owner).
+- Fix `marketplace.json` description ("Local marketplace…") and set real owner/author in `marketplace.json`, `plugin.json` and `LICENSE` (`roman-ambinder`, the owner's GitHub handle).
 - Optional: GitHub repo description and topics (owner sets them in GitHub settings; list suggested values).
 
 ### 6. Release
@@ -125,6 +125,10 @@ Move into `docs/` (content moved, not deleted):
 
 - Audience: public, through an open GitHub release.
 - Scope: approach C (docs and cleanup, `/adlc:setup`, real install test, interactive checklist, demo, README split, cost and limits section).
+- Owner and author: GitHub handle `roman-ambinder` in `LICENSE`, `plugin.json` and `marketplace.json`.
+- First-run test: run with `claude -p` in the cloud session, Sonnet, total spend capped at $10 across all runs. Stop and report if the cap would be passed.
+- The repository is public (or will be before release).
+- SECURITY.md points to GitHub private vulnerability reporting; the owner turns it on in Settings → Security before release.
 
 ## Left to the builder
 
