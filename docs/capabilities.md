@@ -43,7 +43,12 @@ Status as of version 0.5.1 (Slices 1–3, the 2026-11-13 review follow-up, the 2
 | `state.json` and handoffs are validated against `schemas/*.json` by a small built-in validator; a damaged state file gives a rule error naming the fields | `lib/schema.js`, `lib/state.js`, `lib/integrate.js` | `tests/state.test.js` |
 | User-only commands are recognised only where `adlc` is the command run (so `grep "adlc approve"` passes); masking is denied only after a check command (so `mkdir -p build \|\| true` passes) | `hooks/patterns.js` | `tests/hooks.test.js` |
 
-Known limits of these: a Grep over a whole directory can still match text inside a secret file; the coordinator still passes the reviewer's report to the CLI, so the report's wording is trusted; outside git the release hash does not cover code. Shell indirection (scripts, variables) remains best-effort, as before.
+| A Grep over a folder asks first when the folder holds secret-looking files that git does not ignore (ripgrep skips ignored files); a glob or type filter makes it pass | `hooks/guard.js` | `tests/hooks.test.js` |
+| `/adlc:cancel <reason>` (user-only) ends active leases, records the reason and archives an unfinished change; archives no longer collide when a title repeats | `lib/cli.js`, `skills/cancel` | `tests/cli.test.js` |
+| `adlc summary` reports time per stage and task, attempts, check runs and review findings; release notes include it | `lib/cli.js`, `skills/release`, `templates/release.md` | `tests/cli.test.js` |
+| After `integrate done` in worktree mode the CLI prints `git worktree remove` / `git branch -d` for that task; the coordinator runs them after build with approval | `lib/integrate.js`, `skills/coordinator` | `tests/worktree.test.js` |
+
+Known limits of these: the Grep folder check needs git (outside a repository it does not look); the coordinator still passes the reviewer's report to the CLI, so the report's wording is trusted; outside git the release hash does not cover code. Shell indirection (scripts, variables) remains best-effort, as before.
 
 ## Live smoke test (2026-11-13, Claude Code 2.1.311, `claude -p --plugin-dir`, Sonnet)
 

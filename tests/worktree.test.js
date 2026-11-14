@@ -134,8 +134,11 @@ test('worktree mode: isolated workers, scoped writes, approved commit and merge,
     assert.match(nx.in_flight.find((x) => x.id === w.task).next, /adlc integrate done/);
     ok(cli(root, ['run', '--stage', 'build', '--', 'test -f src/a.js']));
     if (w.task === 'T2') ok(cli(root, ['run', '--stage', 'build', '--', 'test -f src/b.js']));
-    ok(cli(root, ['integrate', 'done', w.task]));
+    const done = ok(cli(root, ['integrate', 'done', w.task]));
+    assert.match(done, new RegExp(`git worktree remove '.*${w.task}'\\n  git branch -d 'wt-${w.task}'`));
   }
+  // the printed cleanup commands work once everything is merged
+  for (const w of workers) { sh(root, `git worktree remove '${w.ws}'`); sh(root, `git branch -d wt-${w.task}`); }
   assert.ok(fs.existsSync(path.join(root, 'src/a.js')) && fs.existsSync(path.join(root, 'src/b.js')));
   ok(cli(root, ['stage', 'complete', 'build']));
 });

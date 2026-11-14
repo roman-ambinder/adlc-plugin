@@ -328,3 +328,20 @@ test('guard does not deny commands that only mention adlc or a check word', () =
     'CI=1 npm run build || echo failed',
   ]) assert.equal(decision(hook('guard', bash(cmd), root)), 'deny', cmd);
 });
+
+test('guard asks before a Grep over a folder that holds secret files git would see', () => {
+  const { spawnSync } = require('node:child_process');
+  const root = project();
+  spawnSync('git', ['init', '-q'], { cwd: root });
+  fs.mkdirSync(path.join(root, 'config'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'config/.env.local'), 'TOKEN=x\n');
+  fs.writeFileSync(path.join(root, 'config/app.js'), 'x\n');
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'src/a.js'), 'x\n');
+  const grep = (ti) => ({ hook_event_name: 'PreToolUse', tool_name: 'Grep', cwd: root, tool_input: { pattern: 'TOKEN', ...ti } });
+  assert.equal(decision(hook('guard', grep({}), root)), 'ask', 'whole repository');
+  assert.equal(decision(hook('guard', grep({ path: 'config' }), root)), 'ask');
+  for (const ti of [{ path: 'src' }, { glob: '*.js' }, { type: 'js' }]) assert.equal(decision(hook('guard', grep(ti), root)), null, JSON.stringify(ti));
+  fs.writeFileSync(path.join(root, '.gitignore'), '.env*\n');
+  assert.equal(decision(hook('guard', grep({}), root)), null, 'ripgrep skips git-ignored files');
+});

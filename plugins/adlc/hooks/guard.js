@@ -71,7 +71,26 @@ function decideRead(input) {
   const target = ti.file_path || ti.path;
   if (ti.glob && P.secretGlob(ti.glob)) return deny(`the pattern ${ti.glob} selects files that may hold secrets; ask the user to provide the values you need`);
   if (target && P.SECRET_FILE.test(String(target))) return deny(`${target} may hold secrets; ask the user to provide the values you need`);
+  // A Grep over a whole folder reads every file in it. ripgrep skips git-ignored files, so only secret files that git
+  // would see matter; a glob or type filter that cannot select them makes the search safe.
+  if (input.tool_name === 'Grep' && !ti.glob && !ti.type) {
+    const dir = path.resolve(input.cwd || process.cwd(), String(target || '.'));
+    const found = secretFilesUnder(dir);
+    if (found.length) return ask(`this search reads every file under ${target || 'the working directory'}, including ${found.slice(0, 3).join(', ')}${found.length > 3 ? ', …' : ''}, which may hold secrets. Approve only if that is intended; otherwise add a glob or type filter`);
+  }
   return null;
+}
+
+// Secret-looking files git would include under dir (tracked or untracked, not ignored). Empty outside git or on error.
+function secretFilesUnder(dir) {
+  try {
+    if (!fs.statSync(dir).isDirectory()) return [];
+    const r = require('node:child_process').spawnSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], { cwd: dir, encoding: 'utf8', timeout: 3000, maxBuffer: 64 * 1024 * 1024 });
+    if (r.status !== 0) return [];
+    return r.stdout.split('\0').filter((f) => f && P.SECRET_FILE.test(f));
+  } catch {
+    return [];
+  }
 }
 
 function decideBash(input, ctx, binding, level) {
@@ -99,8 +118,8 @@ function decideBash(input, ctx, binding, level) {
   if (P.USER_ONLY.test(cmd)) {
     // The user's own /adlc:<action> prompt (recorded by the UserPromptSubmit hook) is the approval: no second prompt.
     const m = cmd.match(P.USER_ONLY_ARG);
-    if (m && userIntent.pending(ctx.root, m[1], ['unblock', 'archive'].includes(m[1]) ? null : m[2])) return null;
-    return deny(`only the user can run \`adlc ${m ? m[1] : 'approve|skip|unblock|archive'}\`: ask them to type /adlc:${m ? m[1] : 'approve'}${m && m[2] && !m[2].startsWith('-') ? ` ${m[2]}` : ''} themselves, then run it once. Do not try to get around this`);
+    if (m && userIntent.pending(ctx.root, m[1], ['unblock', 'archive', 'cancel'].includes(m[1]) ? null : m[2])) return null;
+    return deny(`only the user can run \`adlc ${m ? m[1] : 'approve|skip|unblock|archive|cancel'}\`: ask them to type /adlc:${m ? m[1] : 'approve'}${m && m[2] && !m[2].startsWith('-') ? ` ${m[2]}` : ''} themselves, then run it once. Do not try to get around this`);
   }
   const kind = P.riskyKind(cmd, level);
   if (kind) return ask(`${kind} requires your approval: \`${cmd}\``);

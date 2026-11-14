@@ -218,6 +218,12 @@ function integrateDone(root, s, id) {
   if (problems.length) throw rule(`cannot integrate ${id}:\n- ${problems.join('\n- ')}\nIf a check failed, run \`adlc task repair ${id} "<reason>"\`.`);
   t.status = 'integrated';
   t.timing = { ...t.timing, integrated_at: now() };
+  // The task's worktree and branch are merged now; these commands remove them (git refuses if anything is left).
+  if (s.execution.mode === 'worktree') {
+    const lease = [...s.leases].reverse().find((l) => l.task === id && l.branch && l.workspace);
+    if (lease) return { cleanup: [`git worktree remove ${shellQuote(lease.workspace)}`, `git branch -d ${shellQuote(lease.branch)}`] };
+  }
+  return {};
 }
 
 module.exports = { validateHandoff, handoffPath, submitHandoff, attributedWrites, gitChanged, crossChecks, integrateCheck, recordReturned, integrateDone };

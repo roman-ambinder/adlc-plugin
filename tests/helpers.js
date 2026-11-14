@@ -17,7 +17,7 @@ function cleanEnv(extra = {}) {
   return { ...env, ...extra };
 }
 
-const USER_ONLY = ['approve', 'skip', 'unblock', 'archive'];
+const USER_ONLY = ['approve', 'skip', 'unblock', 'archive', 'cancel'];
 
 // Plays the user: submits the prompt the user would type, which the UserPromptSubmit hook turns into an intent.
 function userPrompt(root, prompt, extraEnv = {}) {

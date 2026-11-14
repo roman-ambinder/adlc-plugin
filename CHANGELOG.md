@@ -3,7 +3,14 @@
 ## Unreleased
 
 ### Added
+- **`/adlc:cancel <reason>`** (user-only): stop an unfinished change. Active workers' leases end as lost, the reason is recorded in `approvals.jsonl` and `handoff.md`, and the change is archived. Code already written stays in place for you to review.
+- **`adlc summary`**: time per stage and task, failed attempts, check runs and review findings. The release notes now include it under "Delivery summary". Tokens and cost are still not observable from hooks.
+- **Worktree cleanup commands**: after `adlc integrate done` in worktree mode, the CLI prints `git worktree remove` and `git branch -d` for the task. The coordinator runs them once build is complete, each with your approval; git refuses to remove anything that is not merged and clean.
+- **Grep over a folder with secret files** now asks first when the folder holds secret-looking files that git does not ignore. A `glob` or `type` filter that excludes them passes without a prompt.
 - Releases are automatic: when the version on `main` changes, a workflow runs the tests, tags `v<version>` and publishes a GitHub release with the changelog section.
+
+### Fixed
+- Archiving a change whose id is already in `archive/` no longer fails; it goes to `archive/<id>-2`.
 
 ## 0.5.1 — 2026-11-14
 
