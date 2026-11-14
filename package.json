@@ -1,6 +1,6 @@
 {
   "name": "adlc-plugin-repo",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "Repository for the adlc Claude Code plugin (agentic development lifecycle)",
   "license": "MIT",
