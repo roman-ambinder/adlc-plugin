@@ -15,8 +15,9 @@ const rules = require('./rules');
 const { appendLine, atomicWrite } = require('./fsutil');
 const { AdlcError, EXIT, usage, rule } = require('./errors');
 const { redact } = require('./redact');
+const setup = require('./setup');
 
-const BOOL = new Set(['small', 'json', 'exclusive', 'force', 'help']);
+const BOOL = new Set(['small', 'json', 'exclusive', 'force', 'help', 'dry-run']);
 
 const HELP = `usage: adlc <command> [args]
   start "<title>" [--type feature|bugfix] [--small] [--approval-gates plan,release|none]
@@ -36,6 +37,7 @@ const HELP = `usage: adlc <command> [args]
   integrate check <T>  integrate done <T>
   lease stopped <L> <note>   lease lost <L> <note>
   handoff <note>   summary [--json]   archive [--force] (user-only)   cancel <reason> (user-only)   init
+  setup [--dry-run]        add the recommended settings to .claude/settings.json and .gitignore
 exit codes: 0 ok, 1 usage, 2 rule violation, 3 concurrent modification, 4 not initialised,
             5 command failed (evidence recorded), 70 internal error`;
 
@@ -180,6 +182,14 @@ function summaryText(o) {
 }
 
 const handlers = {
+  setup({ flags }) {
+    // Works before any change exists, so it finds the project itself instead of using the state root.
+    const root = setup.projectRoot(process.cwd());
+    const plan = setup.planSetup(root, setup.loadTemplate());
+    const dryRun = Boolean(flags['dry-run']);
+    if (!dryRun) setup.applySetup(root, plan);
+    return { obj: { root, dryRun, added: plan.added, skipped: plan.skipped, notes: plan.notes, gitignore: plan.gitignore.changed }, text: setup.formatPlan(plan, { dryRun }) };
+  },
   init({ root }) {
     return { text: `initialised ${st.init(root).dir}` };
   },
@@ -212,7 +222,10 @@ const handlers = {
     for (const [stage, v] of Object.entries(s.stages)) {
       if (v.status === 'skipped') record(root, { type: 'skip', change: s.change.id, stage, reason: v.reason, actor: 'user' });
     }
-    return { obj: { change: s.change, stage: s.stage }, text: `started ${s.change.id}; next: adlc stage start ${s.stage}` };
+    const tip = setup.isSetUp(setup.projectRoot(root), setup.loadTemplate())
+      ? ''
+      : '\nTip: this project is not set up for adlc yet. Run /adlc:setup to add the recommended permissions.';
+    return { obj: { change: s.change, stage: s.stage }, text: `started ${s.change.id}; next: adlc stage start ${s.stage}${tip}` };
   },
 
   status({ root }) {

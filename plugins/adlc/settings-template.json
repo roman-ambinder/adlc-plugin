@@ -2,7 +2,7 @@
   "worktree": { "baseRef": "head" },
   "permissions": {
     "allow": [
-      "Bash(adlc status)", "Bash(adlc status *)", "Bash(adlc next)", "Bash(adlc next *)",
+      "Bash(adlc status)", "Bash(adlc status *)", "Bash(adlc start *)", "Bash(adlc next)", "Bash(adlc next *)",
       "Bash(adlc stage *)", "Bash(adlc task *)", "Bash(adlc contract *)", "Bash(adlc packet *)",
       "Bash(adlc exec *)", "Bash(adlc gate *)", "Bash(adlc hash *)", "Bash(adlc run *)",
       "Bash(adlc review *)", "Bash(adlc trace)", "Bash(adlc dispatch *)", "Bash(adlc worker *)",
