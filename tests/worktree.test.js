@@ -125,6 +125,13 @@ test('worktree mode: isolated workers, scoped writes, approved commit and merge,
     sh(root, check.commands[0]); sh(root, check.commands[1]);
     assert.match(cli(root, ['integrate', 'done', w.task]).stderr, /is not merged into the current branch/);
     sh(root, check.commands[2]); // the user approves each exact command
+    // a later check (for example from a new session) sees the merge and points at the next step instead of failing
+    const again = JSON.parse(ok(cli(root, ['integrate', 'check', w.task, '--json'])));
+    assert.deepEqual(again.problems, []);
+    assert.deepEqual(again.commands, []);
+    assert.match(again.warnings.join('\n'), /already committed and merged/);
+    const nx = JSON.parse(ok(cli(root, ['next', '--json'])));
+    assert.match(nx.in_flight.find((x) => x.id === w.task).next, /adlc integrate done/);
     ok(cli(root, ['run', '--stage', 'build', '--', 'test -f src/a.js']));
     if (w.task === 'T2') ok(cli(root, ['run', '--stage', 'build', '--', 'test -f src/b.js']));
     ok(cli(root, ['integrate', 'done', w.task]));
