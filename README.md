@@ -104,6 +104,10 @@ Commands marked **user-only** run only when you type them; the model cannot star
 | [docs/capabilities.md](docs/capabilities.md) | What is implemented, tested and live-tested |
 | [docs/development.md](docs/development.md) | Running the tests, the end-to-end example, releasing |
 
+## Contributing and security
+
+Bug reports and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Please report security problems privately, as described in [SECURITY.md](SECURITY.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

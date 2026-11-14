@@ -38,4 +38,4 @@ What adlc does **not** protect against:
 - **Secret redaction is best-effort.** Keep secrets out of command output.
 - **One active change per repository**, and no Windows support (WSL is untested).
 
-The detailed record of what is implemented, tested and live-tested is in [capabilities.md](capabilities.md).
+The detailed record of what is implemented, tested and live-tested is in [capabilities.md](capabilities.md). To report a security problem, see [SECURITY.md](../SECURITY.md).

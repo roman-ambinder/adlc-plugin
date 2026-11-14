@@ -52,3 +52,13 @@ test('docs: README leads with why, demo, quickstart, cost and limits', () => {
   assert.ok(readme.includes('/adlc:setup'));
   assert.match(readme, /best-effort/);
 });
+
+test('community files exist and SECURITY.md points to private vulnerability reporting', () => {
+  for (const f of ['SECURITY.md', 'CONTRIBUTING.md', '.github/ISSUE_TEMPLATE/bug_report.md', '.github/ISSUE_TEMPLATE/feature_request.md', '.github/pull_request_template.md']) {
+    assert.ok(fs.existsSync(path.join(REPO, f)), f);
+  }
+  const sec = read('SECURITY.md');
+  assert.match(sec, /security\/advisories\/new/);
+  assert.match(sec, /best-effort/);
+  assert.match(read('README.md'), /\]\(SECURITY\.md\)/);
+});
