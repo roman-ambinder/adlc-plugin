@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Documentation
+- README: a Quick start section with install, project setup and the nine commands of one change.
 - README: install from GitHub (`claude plugin marketplace add roman-ambinder/adlc-plugin`), pin a release with `#<tag>`, update, and set options with `/plugin configure` or `--config`.
 
 ## 0.6.0 — 2026-11-14
