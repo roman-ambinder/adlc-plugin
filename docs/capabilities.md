@@ -1,6 +1,6 @@
 # adlc capabilities — implemented, tested, unsupported
 
-Status as of version 0.6.0 (Slices 1–3, the 2026-11-13 review follow-up, the 2026-11-14 hardening, the parallel live-test fixes, cancel, summary and worktree cleanup), 2026-11-14. "Tested" means covered by `npm test` (all passing at the time of writing; the count is not recorded here so it cannot drift) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
+Status as of version 0.7.0 (first-run test and `/adlc:setup`; before that Slices 1–3, the 2026-11-13 review follow-up, the 2026-11-14 hardening, the parallel live-test fixes, cancel, summary and worktree cleanup), 2026-11-14. "Tested" means covered by `npm test` (all passing at the time of writing; the count is not recorded here so it cannot drift) or by `claude plugin validate --strict`. "Not live-tested" means it has not been run inside a real Claude Code session with a model.
 
 ## Implemented and tested
 
@@ -93,7 +93,7 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 - One earlier worktree run had both workers' first Bash call denied by the platform permission layer (their claims never ran). It did not reproduce on a rerun with the same flags and I did not find the cause.
 
 **Still not live-tested**
-- An interactive session, as opposed to `-p`, including typing `/adlc:approve` in the app so the `UserPromptSubmit` intent is recorded (verified only with `-p`).
+- ~~An interactive session, as opposed to `-p`~~: done on 2026-11-14 with the maintainer's [interactive checklist](interactive-checklist.md); see the end of this file.
 - SubagentStop's `last_assistant_message` was empty in `-p` (the subagent reported through its handback), so stop records have an empty excerpt. (In the 0.5.0 run below it was filled for the analyst, developer and reviewer.)
 
 Set `ADLC_HOOK_LOG=<file>` to record hook metadata (event, tool, `agent_id`, `agent_type`, session, cwd; never tool input) when diagnosing.
@@ -239,3 +239,20 @@ Implemented, tested (`tests/worktree.test.js`, which uses real `git worktree`s) 
 - Workers must run `adlc worker claim` before writing in every mode, not only in parallel modes, so every worker write is attributed.
 - `adlc task update`, `adlc lease stopped`, `adlc trace` and `adlc archive` were added during implementation. `adlc archive` is user-only (`/adlc:archive`).
 - Tests for Tasks 4–11 were written alongside the code rather than strictly before it.
+
+## First-run test, installed from GitHub (0.7.0, 2026-11-14, Claude Code 2.1.325, `claude -p`, Sonnet)
+
+The plugin was installed from GitHub into an empty Claude Code config and used on a new repository, two times. Full log and costs: [first-run-test.md](first-run-test.md).
+
+| Run | Result |
+|---|---|
+| 1: 0.6.0 from `main`, settings copied by hand | Reached review. Found three problems a new user could not get past: plugin files needing read permission, the model stopping at unfilled option text, and (Run 2) `adlc summary` missing from the template |
+| 2: the 0.7.0 branch, with `/adlc:setup` | Setup, then start → done with no read prompts. About $1.45 for the nine lifecycle steps, $0.20 for setup |
+
+`/adlc:setup` (`lib/setup.js`) is tested by `tests/setup.test.js`: fresh project, dry run, keeping existing entries, skipping clashing rules, invalid settings, `.gitignore` variants, running from a subdirectory.
+
+
+**Post-release check (v0.7.0, 2026-11-14).** Installed with `claude plugin marketplace add 'roman-ambinder/adlc-plugin#v0.7.0'` into an empty Claude Code config: version 0.7.0, 16 skills including `setup`; `adlc setup --dry-run` in a new repository listed the template entries. No model calls.
+
+**Interactive checklist (v0.7.0, 2026-11-14).** The maintainer ran all 18 steps of [interactive-checklist.md](interactive-checklist.md) in an interactive session and reported every step as passed: install from GitHub, `/adlc:setup` (dry run, ask, apply, and "already set up" on a second run), a change from `/adlc:start` to `done` with `/clear` between stages, a refused prose approval, and `/adlc:approve plan` and `/adlc:approve release` typed in the session.
+

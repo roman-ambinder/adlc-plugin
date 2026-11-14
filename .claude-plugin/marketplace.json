@@ -1,7 +1,7 @@
 {
   "name": "adlc-marketplace",
-  "owner": { "name": "adlc contributors" },
-  "description": "Local marketplace for the adlc agentic development lifecycle plugin",
+  "owner": { "name": "roman-ambinder" },
+  "description": "adlc plugin marketplace: agentic development lifecycle with approval gates",
   "plugins": [
     {
       "name": "adlc",

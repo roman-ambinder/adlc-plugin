@@ -29,3 +29,15 @@ test('errors carry exit codes', () => {
   assert.equal(rule('x').exitCode, EXIT.RULE);
   assert.ok(new AdlcError(EXIT.CONFLICT, 'c') instanceof Error);
 });
+
+test('owner and author are roman-ambinder; marketplace text is not "Local"', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const market = JSON.parse(fs.readFileSync(path.join(root, '.claude-plugin', 'marketplace.json'), 'utf8'));
+  const plugin = JSON.parse(fs.readFileSync(path.join(root, 'plugins', 'adlc', '.claude-plugin', 'plugin.json'), 'utf8'));
+  assert.equal(market.owner.name, 'roman-ambinder');
+  assert.equal(plugin.author.name, 'roman-ambinder');
+  assert.doesNotMatch(market.description, /local/i);
+  assert.match(fs.readFileSync(path.join(root, 'LICENSE'), 'utf8'), /Copyright \(c\) 2026 roman-ambinder/);
+});
