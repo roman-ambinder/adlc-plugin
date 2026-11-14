@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- **The release approval went stale in a loop.** After `/adlc:approve release`, the next `/adlc:release` refreshed the delivery summary (whose elapsed time always changes) in release.md, which made the approval stale and asked for it again. When the approval is valid, the release skill now completes the stage without touching the covered files. Found by a live test.
 - **A new session could not dispatch once an earlier session used up the task budget.** `adlc next` checked the earlier session's count before any reset, so no task was listed as ready and the build stalled. The budget now applies per session the hooks recorded. Found by a live test.
 - **A second review finding for the same task was lost.** `adlc task repair` refused a task already reopened by an earlier finding. It now adds the finding to the task's repair note without using another attempt, and the review skill groups findings by task. Found by a live test.
 

@@ -98,6 +98,27 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 
 Set `ADLC_HOOK_LOG=<file>` to record hook metadata (event, tool, `agent_id`, `agent_type`, session, cwd; never tool input) when diagnosing.
 
+## Full lifecycle on a real multi-task change (2026-11-14, Claude Code 2.1.325, `claude -p`, Sonnet)
+
+The change: add an `adlc doctor` command to a scratch copy of this repository (zero dependencies, `node --test`). It ran without `--small`, so discover and design ran too, and the user's answers to the analyst's questions were given as prompts. Two runs, about $8.55 in total ($2.73 for the first, $5.82 for the second).
+
+**Result of the second run: change `done`.**
+- Discover: the analyst asked five real questions (severity of missing permissions, when to run worktree checks, Node minimum, exit codes, which settings are checkable).
+- Plan and design: 19–21 acceptance criteria, 10 decisions, 3 contracts, 5 dependent tasks run in sequence.
+- Build: all 5 tasks were built and integrated in one `/adlc:next`.
+- Review: the first review found 3 blocking issues (an acceptance criterion without a test, a finding id that did not match its contract, and a possible missing test). The user accepted them, `adlc task repair` reopened build for T2 and T3, and the repair build, verify and a second review (0 blocking) passed.
+- Release: approved and completed. Summary: 30 minutes elapsed, 47 check runs (4 failed, all before repairs), 2 retries.
+- The resulting code passes 181 tests, and `adlc doctor` runs and reports correctly.
+
+**Bugs found and fixed:**
+1. *Intent forgery*, described in the next section. Found in the first run.
+2. *A new session could not dispatch after an earlier session used up the task budget.* `adlc next` checked the old session's count before any reset, so nothing was ready. The budget now applies per recorded session.
+3. *A second review finding for one task was lost.* `adlc task repair` refused a task that was already reopened. Further findings now add to its repair note, and the review skill groups findings by task.
+4. *The release approval went stale in a loop.* The final `/adlc:release` refreshed the delivery summary, whose elapsed time always changes. An approved release now completes without touching the covered files.
+5. *The start skill worried about literal `${user_config.…}` text for unset settings.* It now knows that is expected.
+
+**Not covered:** the interactive app, and worktree mode with this change (its tasks depended on each other, so the plan was sequential).
+
 ## Intent forgery found by a live test (2026-11-14)
 
 A longer live test (adding an `adlc doctor` command to a copy of this repository) found that a user intent could be forged: running `hooks/prompt-submit.js` by hand with a fake `/adlc:skip` prompt let `adlc skip` succeed, and the guard allowed the command. The plugin's own test suite, run as a check inside a project, did the same by accident: a hook spawned with an unrelated working directory recorded intents in that project.
