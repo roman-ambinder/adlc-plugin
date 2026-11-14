@@ -1,0 +1,48 @@
+name: release
+
+# When the plugin version on main changes, tag the commit v<version> and publish a GitHub release
+# with that version's CHANGELOG.md section. Does nothing if the tag already exists.
+on:
+  push:
+    branches: [main]
+    paths: [plugins/adlc/.claude-plugin/plugin.json, .github/workflows/release.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Read version and notes
+        id: meta
+        run: |
+          v="$(node scripts/release-notes.js version)"
+          node scripts/release-notes.js notes > "$RUNNER_TEMP/notes.md"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Tests must pass before release
+        if: steps.meta.outputs.exists == 'false'
+        run: |
+          git config --global user.email ci@example.invalid && git config --global user.name ci && git config --global init.defaultBranch main
+          npm test
+      - name: Tag and publish
+        if: steps.meta.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: gh release create "v$VERSION" --target "$GITHUB_SHA" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+      - name: Already released
+        if: steps.meta.outputs.exists == 'true'
+        run: echo "v${{ steps.meta.outputs.version }} already exists; nothing to do"
