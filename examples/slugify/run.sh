@@ -16,9 +16,14 @@ mkdir -p "$WORK"
 WORK="$(cd "$WORK" && pwd -P)"
 cd "$WORK"
 
-adlc() { ADLC_ROOT="$WORK" node "$PLUGIN/bin/adlc" "$@"; }
+adlc() { CLAUDE_CONFIG_DIR="$CFG" ADLC_ROOT="$WORK" node "$PLUGIN/bin/adlc" "$@"; }
 hook() { printf '%s' "$2" | CLAUDE_PROJECT_DIR="$WORK" node "$PLUGIN/hooks/$1.js"; }
-userprompt() { printf '{"hook_event_name":"UserPromptSubmit","session_id":"e2e","prompt":"%s"}' "$1" | CLAUDE_PROJECT_DIR="$WORK" node "$PLUGIN/hooks/prompt-submit.js"; }
+# Plays Claude Code: records the slash command the user typed in a session transcript, then runs the UserPromptSubmit hook.
+CFG="$(mktemp -d)"; TRANSCRIPT="$CFG/projects/e2e/session.jsonl"; mkdir -p "$(dirname "$TRANSCRIPT")"
+userprompt() {
+  node -e 'const [, cmd, args] = /^\/(\S+)\s*(.*)$/.exec(process.argv[1]); console.log(JSON.stringify({ type: "user", uuid: require("crypto").randomUUID(), timestamp: new Date().toISOString(), message: { role: "user", content: `<command-message>${cmd}</command-message>\n<command-name>/${cmd}</command-name>\n<command-args>${args}</command-args>` } }))' "$1" >> "$TRANSCRIPT"
+  printf '{"hook_event_name":"UserPromptSubmit","session_id":"e2e","transcript_path":"%s","prompt":"%s"}' "$TRANSCRIPT" "$1" | CLAUDE_PROJECT_DIR="$WORK" node "$PLUGIN/hooks/prompt-submit.js"
+}
 field() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s)[process.argv[1]]))' "$1"; }
 say() { printf '\n== %s\n' "$*"; }
 

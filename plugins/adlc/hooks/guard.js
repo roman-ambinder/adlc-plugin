@@ -19,6 +19,8 @@ function decideWrite(input, ctx, binding) {
   const ti = input.tool_input || {};
   const target = ti.file_path || ti.notebook_path;
   if (!target) return null;
+  const abs = path.resolve(input.cwd || ctx.root, String(target));
+  if (abs.startsWith(userIntent.projectsDir() + path.sep)) return deny("Claude Code's session transcripts are its own record of what the user typed; do not write to them");
   const { path: rel, workspace } = locate(ctx, input, target);
   if (P.PROTECTED_PATH.test(rel)) return deny(`${rel} is managed by the adlc CLI and hooks; change it only through adlc commands`);
   const edits = Array.isArray(ti.edits) ? ti.edits : [];
@@ -99,6 +101,9 @@ function decideBash(input, ctx, binding, level) {
   if (P.PROTECTED_IN_CMD.test(cmd) && P.WRITE_OPS.test(cmd)) {
     return deny('state.json, approvals.jsonl and runs/ are managed by the adlc CLI and hooks; use adlc commands (read state with `adlc status`)');
   }
+  if (P.HOOK_SCRIPT.test(cmd) && /\bhooks\//.test(cmd)) return deny('adlc hook scripts run only from Claude Code; running one by hand could fake what Claude Code reports');
+  if (P.writesTranscripts(cmd)) return deny("Claude Code's session transcripts are its own record of what the user typed; do not write to them");
+  if (/\bCLAUDE_CONFIG_DIR=/.test(cmd) && P.USER_ONLY.test(cmd)) return deny('user-only adlc commands use the real Claude Code configuration; do not set CLAUDE_CONFIG_DIR for them');
   if (P.removesLifecycleDir(cmd)) return deny('removing, moving or relinking .agent-lifecycle/ would switch the lifecycle off; the user can archive the change with /adlc:archive');
   if (P.writesCliOwned(cmd)) return deny('evidence, handoffs, packets, reviews and traceability under .agent-lifecycle/ are written only by adlc commands (adlc run, adlc worker handoff, adlc review add, adlc trace)');
   if (P.MANAGED_NAME_IN_CMD.test(cmd) && P.WRITE_OPS.test(cmd)) {

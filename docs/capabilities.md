@@ -98,6 +98,18 @@ Run against a scratch repository seeded at the build stage. Two `/adlc:next` run
 
 Set `ADLC_HOOK_LOG=<file>` to record hook metadata (event, tool, `agent_id`, `agent_type`, session, cwd; never tool input) when diagnosing.
 
+## Intent forgery found by a live test (2026-11-14)
+
+A longer live test (adding an `adlc doctor` command to a copy of this repository) found that a user intent could be forged: running `hooks/prompt-submit.js` by hand with a fake `/adlc:skip` prompt let `adlc skip` succeed, and the guard allowed the command. The plugin's own test suite, run as a check inside a project, did the same by accident: a hook spawned with an unrelated working directory recorded intents in that project.
+
+| Fix | Where | Evidence |
+|---|---|---|
+| The CLI accepts an intent only when Claude Code's session transcript (under `<config dir>/projects/`) holds the user's typed `<command-name>/adlc:<action></command-name>` entry, newer than two minutes before the intent and not used before; each entry authorises one action | `lib/userintent.js`, `hooks/prompt-submit.js` | `tests/cli.test.js`; live: a typed `/adlc:skip` in `claude -p` was accepted and its transcript entry recorded |
+| The guard denies running adlc hook scripts by hand, writing to the transcripts (file tools and shell), and setting `CLAUDE_CONFIG_DIR` on a user-only command | `hooks/guard.js`, `hooks/patterns.js` | `tests/hooks.test.js` |
+| Hooks look for the active change only in the project directory Claude Code gives them (else the session cwd), never in the process's own working directory | `hooks/common.js` | `tests/hooks.test.js` |
+
+Limit: hooks and the model's shell run as the same user, so a determined script can still write a fake transcript into Claude Code's projects folder; the guard blocks the direct ways, as with other best-effort Bash guarding.
+
 ## Live smoke test of 0.5.0 (2026-11-14, Claude Code 2.1.325, `claude -p --plugin-dir --add-dir`, Sonnet)
 
 Two scratch repositories, each with a committed `package.json` (`"test": "node --test"`) and `settings-template.json` as `.claude/settings.json`. Eleven `claude -p` sessions, $1.68 in total. Commands were typed as the prompt, the way a user types them.

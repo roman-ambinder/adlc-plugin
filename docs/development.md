@@ -22,15 +22,7 @@ examples/slugify/run.sh
 
 The resulting artifacts are committed in [`examples/slugify/artifacts/`](../examples/slugify/artifacts/).
 
-In an interactive session the same flow is:
-
-1. `/adlc:start "Add slugify utility" --small`
-2. `/adlc:plan`
-3. `/adlc:approve plan`
-4. `/adlc:next` (build), then `/adlc:next` again (verify), then once more (review)
-5. `/adlc:release`
-6. `/adlc:approve release`
-7. `/adlc:release` (completes the stage)
+In an interactive session the same flow is the one in the [Quickstart](../README.md#quickstart).
 
 ## Demo recording
 

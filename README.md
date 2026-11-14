@@ -23,11 +23,25 @@ It uses your repository's own test, lint and type-check commands, so it works wi
 
 *Scripted demo: the real `adlc` CLI and hooks, with the model's work replaced by fixed content so it runs the same way every time. It is made by [`scripts/demo-cast.js`](scripts/demo-cast.js).*
 
+**Real output from the live tests** of 2026-11-14 (Claude Code 2.1.325, `claude -p`). Details are in [docs/capabilities.md](docs/capabilities.md).
+
+**A change from start to done.** Every stage completed or was skipped with a reason. Both gates were approved by the user. `adlc summary` shows where the time went.
+
+![adlc status and adlc summary after a finished change](docs/images/demo-status.png)
+
+**Approvals only count when you type them.** Asked in prose, the model tried `adlc approve plan`. The guard refused it, and the model asked the user to type the slash command. (The prompt, the denied command, the guard's message and the reply are real; the reply is shortened.)
+
+![A prose request to approve the plan is denied by the adlc guard](docs/images/demo-guard.png)
+
+**Parallel build in git worktrees.** Two independent tasks were built at the same time, each in its own worktree. They were merged with `--no-ff` only after the user ran the printed commit and merge commands.
+
+![Two tasks integrated from separate worktrees, with two merge commits](docs/images/demo-worktree.png)
+
 See [`examples/slugify/run.sh`](examples/slugify/run.sh) for a full walkthrough of one small change through every stage, and [`examples/slugify/artifacts/`](examples/slugify/artifacts/) for the files it produces.
 
 ## Quickstart
 
-**You need:** Claude Code 2.1.311 or later, Node 18 or later, git, and macOS or Linux.
+**You need:** Claude Code 2.1.311 or later, Node 18 or later, git, and macOS or Linux. The project should be a git repository with at least one commit.
 
 1. Install the plugin (in a terminal):
 
@@ -56,12 +70,14 @@ See [`examples/slugify/run.sh`](examples/slugify/run.sh) for a full walkthrough 
    1. `/adlc:start "Add slugify utility" --small` (`--small` skips discover and design for small changes)
    2. `/adlc:plan`, then read the files it points to
    3. `/adlc:approve plan`
-   4. `/adlc:next` three times: build, then verify, then review
+   4. `/adlc:next` three times: build, then verify, then review. Approve commit or merge prompts if asked
    5. `/adlc:release`
    6. `/adlc:approve release`
    7. `/adlc:release` again to finish
 
    When you type `/adlc:approve`, Claude Code also asks you to allow the `adlc approve` command. That second click is on purpose: only you can approve.
+
+**Any time:** `/adlc:status` (where things stand), `/adlc:resume` (continue in a new session), `/adlc:cancel <reason>` (stop the change), `/adlc:archive` (clear a finished change to start a new one).
 
 Tip: run `/clear` (or open a new session) between stages. adlc saves its progress to disk, and a short conversation costs less.
 

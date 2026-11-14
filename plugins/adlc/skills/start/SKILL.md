@@ -15,7 +15,7 @@ Runtime values for this session (substituted by Claude Code when this skill load
    adlc start --approval-gates '${user_config.approval_gates}' --parallel-mode '${user_config.parallel_mode}' --max-parallel '${user_config.max_parallel}' --max-repair-attempts '${user_config.max_repair_attempts}' --max-tasks-per-run '${user_config.max_tasks_per_run}' --serial-globs '${user_config.serial_globs}' $ARGUMENTS
    ```
 
-   If plugin options are not saved, the command may still contain `${user_config.…}` text. Run it exactly as written: `adlc start` ignores those values and uses the defaults. Do not ask the user about them.
+   Settings the user has not set reach the command as literal `${user_config.…}` text. That is expected: run it exactly as written; `adlc start` ignores those values and uses the defaults. Do not ask or worry the user about them.
 
    If it exits 2 because a change already exists, show `adlc status` and stop. If it exits 2 because reduced approval gates need the user's own request, tell the user to type `/adlc:start` themselves and stop; do not change the gates.
 2. If the next stage is `discover`: run `adlc stage start discover`, then delegate to the `adlc:analyst` subagent:
