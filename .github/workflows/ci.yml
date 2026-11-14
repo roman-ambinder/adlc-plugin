@@ -1,7 +1,9 @@
 name: ci
 
+# Pushes to main and pull requests; a branch with an open PR runs once, not twice.
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -15,10 +17,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [18, 20, 22]
+        node: [18, 20, 22, 24]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
       # The worktree and end-to-end tests create real commits.
@@ -29,9 +31,10 @@ jobs:
     name: validate plugin and marketplace manifests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
-      - run: npm install -g @anthropic-ai/claude-code
+      # Pinned so a new Claude Code release cannot turn CI red on its own; bump it on purpose.
+      - run: npm install -g @anthropic-ai/claude-code@2.1.325
       - run: npm run validate

@@ -40,6 +40,9 @@ Status as of version 0.4.0 (Slices 1–3 plus the 2026-11-13 review follow-up), 
 | The Grep tool is guarded for secret files; `.envrc`, `.npmrc`, `.netrc`, `.pypirc`, `.aws/credentials`, `*.p12`, `*.pfx` are covered | `hooks/patterns.js`, `hooks/hooks.json` | `tests/hooks.test.js` |
 | `adlc lease stopped` needs the worker's handoff from that dispatch; the task budget resets only for the session the hooks last recorded | `lib/dispatch.js`, `hooks/common.js` | `tests/workflow.test.js`, `tests/cli.test.js` |
 
+| `state.json` and handoffs are validated against `schemas/*.json` by a small built-in validator; a damaged state file gives a rule error naming the fields | `lib/schema.js`, `lib/state.js`, `lib/integrate.js` | `tests/state.test.js` |
+| User-only commands are recognised only where `adlc` is the command run (so `grep "adlc approve"` passes); masking is denied only after a check command (so `mkdir -p build \|\| true` passes) | `hooks/patterns.js` | `tests/hooks.test.js` |
+
 Known limits of these: a Grep over a whole directory can still match text inside a secret file; the coordinator still passes the reviewer's report to the CLI, so the report's wording is trusted; outside git the release hash does not cover code. Shell indirection (scripts, variables) remains best-effort, as before.
 
 ## Live smoke test (2026-11-13, Claude Code 2.1.311, `claude -p --plugin-dir`, Sonnet)
@@ -140,6 +143,8 @@ Implemented, tested (`tests/worktree.test.js`, which uses real `git worktree`s) 
 | File writes made through the Bash tool cannot be attributed at write time | Detected afterwards by `integrate check`, using `git status` and the handoff's file list |
 | Token use and cost are not observable from hooks | Recorded as `"not observable"`; the controls are `maxTurns`, the task budget and repair limits |
 | `bin/` prevents installation on claude.ai and Cowork | Claude Code CLI and desktop only |
+| Windows | Not supported: `adlc run` uses `sh -c` and the guard assumes a POSIX shell. macOS and Linux only; WSL untested |
+| One change at a time | One active change per repository; `/adlc:archive` before starting the next |
 | Weakened assertions in tests are not detected by hooks | The reviewer agent |
 | Bash guarding cannot stop scripts written with Write and run later, obfuscated commands (`eval`, variable indirection), or masking by pipes without `pipefail` | `integrate check` and the reviewer detect the effects afterwards |
 | Hook timeouts or crashes fail open at the platform level | Guard internal errors return `ask`; platform permission prompts still apply |

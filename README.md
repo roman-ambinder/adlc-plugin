@@ -69,21 +69,21 @@ adlc-plugin/
 │   ├── bin/adlc                         state CLI (on the Bash PATH while enabled)
 │   ├── lib/                             cli, state, stages, tasks, packets, gates, rules,
 │   │                                    evidence, redact, exec, dispatch, integrate,
-│   │                                    worktree, fsutil, glob, errors, masking, userintent
+│   │                                    worktree, fsutil, glob, errors, masking, userintent, schema
 │   ├── hooks/                           hooks.json, guard, audit, subagent-stop,
 │   │                                    session-start, prompt-submit, common, patterns
 │   ├── skills/<name>/SKILL.md           start plan approve next status verify review
 │   │                                    resume release skip unblock archive coordinator worker-contract
 │   ├── agents/                          analyst architect developer developer-worktree tester reviewer
 │   ├── templates/                       requirements plan decisions handoff release review
-│   ├── schemas/                         state.schema.json, handoff.schema.json
+│   ├── schemas/                         state.schema.json, handoff.schema.json (enforced by lib/schema.js)
 │   └── settings-template.json           permissions to copy into .claude/settings.json
 └── tests/                               node:test suites + helpers.js
 ```
 
 ## Installation
 
-Requirements: Claude Code ≥ 2.1.311, Node ≥ 18, git (recommended).
+Requirements: Claude Code ≥ 2.1.311, Node ≥ 18, git (recommended), macOS or Linux. Windows is not supported: `adlc run` executes checks with `sh -c`, and the guard's patterns assume a POSIX shell. WSL should work but is untested.
 
 **From this repository as a local marketplace:**
 
@@ -188,6 +188,8 @@ Workers never commit. When a task passes `adlc integrate check`, the CLI prints 
 
 `adlc start` writes `.agent-lifecycle/.gitignore` for the last row.
 
+One change is active at a time per repository. Finish it, or archive it with `/adlc:archive`, before starting the next. `adlc` checks `state.json` against `schemas/state.schema.json` on every read, so a damaged or hand-edited file is reported with the exact fields at fault.
+
 **Interruption safety:**
 - `state.json` is written to a temp file, fsynced and renamed, under a lock. A write is refused (exit 3) if the revision changed since it was read.
 - JSONL appends tolerate a torn last line.
@@ -249,7 +251,7 @@ npm test
 npm run validate
 ```
 
-`npm test` runs the `node:test` suites (state, stages, tasks, gates, evidence, dispatch, integration, CLI, hooks, skill and agent files, and the end-to-end example). CI (`.github/workflows/ci.yml`) runs them on Node 18, 20 and 22 and validates the manifests. `npm run validate` runs `claude plugin validate --strict` on the plugin and the marketplace.
+`npm test` runs the `node:test` suites (state, stages, tasks, gates, evidence, dispatch, integration, CLI, hooks, skill and agent files, and the end-to-end example). CI (`.github/workflows/ci.yml`) runs them on Node 18, 20, 22 and 24 for pull requests and pushes to `main`, and validates the manifests with a pinned Claude Code version. `npm run validate` runs `claude plugin validate --strict` on the plugin and the marketplace.
 
 ## Troubleshooting
 
@@ -259,6 +261,7 @@ npm run validate
 | `the user has not asked for this` | Type the slash command yourself (`/adlc:approve plan`, `/adlc:archive`, …). Scripts must submit the prompt to the `UserPromptSubmit` hook first, as `examples/slugify/run.sh` does |
 | `no active change` (exit 4) | Run `/adlc:start` first. The CLI finds `.agent-lifecycle/` by walking up from the current directory, or uses `ADLC_ROOT` |
 | `plan gate not approved` / `approval is stale` | Review the files, then run `/adlc:approve plan` again. Any edit to the covered files (requirements, plan, decisions) or to the tasks, contracts or execution plan after approval needs a new approval. Packets are rendered from the tasks, so they are covered through them; a hand edit to a packet is overwritten at the next dispatch |
+| `state.json does not match schemas/state.schema.json` | The file was edited by hand or damaged. Restore it from version control (`git checkout -- .agent-lifecycle/state.json`) |
 | `state changed concurrently` (exit 3) | Another adlc process wrote state. Re-run the command |
 | `no SubagentStop record for L-…` | The worker may still be running. Once it has returned, inspect its changes and run `adlc lease stopped <L> "<note>"` |
 | `approved task check … has not been run in this verify stage` | Run it with `adlc run --stage verify -- "<check>"`, using the exact text from the plan |

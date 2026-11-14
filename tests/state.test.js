@@ -84,3 +84,19 @@ test('findRoot walks up to the directory holding state.json', () => {
   fs.mkdirSync(nested, { recursive: true });
   assert.equal(st.findRoot(nested), root);
 });
+
+test('load reports a damaged state file against the schema, and handoffs use their schema', () => {
+  const { tmpdir, lib } = require('./helpers');
+  const schema = lib('schema');
+  const st2 = lib('state');
+  const root = tmpdir();
+  st2.create(root, st2.newState({ title: 'x' }));
+  const file = st2.paths(root).state;
+  const s = JSON.parse(fs.readFileSync(file, 'utf8'));
+  s.tasks = [{ ...lib('tasks').addTask(st2.newState({ title: 'y' }), { title: 't', goal: 'g', files: ['a.js'] }), id: 'X1', status: 'weird' }];
+  delete s.leases;
+  fs.writeFileSync(file, JSON.stringify(s));
+  assert.throws(() => st2.load(root), (e) => e.exitCode === 2 && /missing "leases"/.test(e.message) && /tasks\[0\]\.id: must match/.test(e.message) && /tasks\[0\]\.status: must be one of/.test(e.message));
+  assert.deepEqual(schema.check('state', st2.newState({ title: 'ok' })), []);
+  assert.match(lib('integrate').validateHandoff({ task: 'T1', status: 'done' }).join('\n'), /missing "workspace"/);
+});
