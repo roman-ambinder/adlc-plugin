@@ -2,7 +2,7 @@
 description: Prepare the adlc release summary - changes, acceptance criteria status, migration, deployment and rollback steps - and complete the Release stage after approval. Use when review is complete.
 ---
 
-Read `${CLAUDE_PLUGIN_ROOT}/skills/coordinator/SKILL.md` first and follow it.
+Load the `adlc:coordinator` skill with the Skill tool first and follow it. If the Skill tool cannot load it, read `${CLAUDE_PLUGIN_ROOT}/skills/coordinator/SKILL.md` instead.
 
 Runtime values for this session (substituted by Claude Code when this skill loads; the coordinator rules refer to them):
 - CLI fallback if `adlc` is not on PATH: `node "${CLAUDE_PLUGIN_ROOT}/bin/adlc"`
